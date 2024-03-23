@@ -353,10 +353,17 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-def heuristic2(current_tour: list[int]) -> int:
+def heuristic3(current_tour: list[int]) -> float:  
+    # This is a greedy heuristic and chooses the next shortest city
+    N = len(dist_matrix)
+    unvisited = list(set(range(N)).difference(set(current_tour)))
+    
+    return sum([dist_matrix[current_tour[-1]][x] for x in unvisited]) / len(unvisited)
+
+def heuristic2(current_tour: list[int], k: int) -> int:
     """
-    Calculates the heuristic value of a given tour by greedily visiting the the unvisited cities by going to the next 
-    closest city
+    Calculates the heuristic value of a given tour by greedily visiting at most 
+    k unvisited cities by going to the next closest city
 
     Args:
         current_tour (list[int]): The current tour
@@ -365,6 +372,9 @@ def heuristic2(current_tour: list[int]) -> int:
         int: The heuristic cost of the tour.
 
     """
+    
+    k = len(tour)
+    
     # This is a greedy heuristic and chooses the next shortest city
     N = len(dist_matrix)
     unvisited = list(set(range(N)).difference(set(current_tour)))
@@ -374,7 +384,7 @@ def heuristic2(current_tour: list[int]) -> int:
     current = current_tour[-1]
     
     # Iterate through all unvisited cities
-    while unvisited:
+    while unvisited and k > 0:
         # Pick the city that is closest to the current
         x = min(unvisited, key=lambda node: dist_matrix[current][node])
         
@@ -382,13 +392,15 @@ def heuristic2(current_tour: list[int]) -> int:
         hv += dist_matrix[current][x]
         current = x
         unvisited.remove(x)
+        k -= 1
     
-    # Add the final jump to get to the original city
-    hv += dist_matrix[current][current_tour[0]]
+    if not unvisited:
+        # Add the final jump to get to the original city
+        hv += dist_matrix[current][current_tour[0]]
     
     return hv
 
-def heuristic(current_tour: list[int]) -> int:
+def heuristic1(current_tour: list[int]) -> int:
     """
     Calculates the heuristic value of a given tour by sequentially visting all
     unvisted cities in the tour.
@@ -427,12 +439,13 @@ def AS(init_city: int) -> list[int]:
     
     # Integral identifier
     id = 0
+    h = heuristic2
     
     # Register the initial node
     S, P, PC, D = [[init_city]], [None], [0], [0]
     
     # Add the initial node to the fringe
-    F = [(id, S[0], P[0], PC[0], D[0], heuristic2(S[0]))]
+    F = [(id, S[0], P[0], PC[0], D[0], h(S[0]))]
     
     # Iterate through nodes in the fringe
     while F:
@@ -461,7 +474,8 @@ def AS(init_city: int) -> list[int]:
                 return tour, PC[id] + dist_matrix[tour[-1]][tour[0]]
             
             # If it's not a goal state then add it to the fringe
-            f = PC[id] + heuristic2(S[id])
+            # print(PC[id], h(S[id]))
+            f = PC[id] + h(S[id])
             F.append((id, S[id], P[id], PC[id], D[id], f))
     
     return [], 0
