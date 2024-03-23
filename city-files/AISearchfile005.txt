@@ -1,0 +1,6 @@
+SIZE = 5,
+21,14,40,32,
+13,8,8,
+7,10,
+3,
+NOTE = This is a custom city set

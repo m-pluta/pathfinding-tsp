@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile012.txt"
+input_file = "AISearchfile058.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -353,26 +353,139 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
+from pprint import pprint as print
+from copy import copy
+import math
+import random
 
+max_it = 1000   # Number of iterations
+num_parts = 5   # Number of particles
+delta = 4       # delta - determinant of neighbourhood
+alpha = 1       # cognitive learning factor
+beta = 1        # social learning factor
+epsilon1 = 1    # determines proximity
+epsilon2 = 1    # determines proximity
 
+num_cities = len(dist_matrix)
 
+def get_tour_length(tour: list[int]) -> int:
+    edges = list(zip(tour, tour[1:] + [tour[0]]))
+    return sum([dist_matrix[a][b] for (a,b) in edges])
 
+def get_random_tour() -> list[int]:
+    return random.sample(range(num_cities), num_cities)
 
+def get_random_velocity(n_swaps: int = 5) -> list[tuple[int,int]]:
+    return [tuple(random.sample(range(num_cities), 2)) for _ in range(n_swaps)]
 
+def calc_v(tourA: list[int], tourB: list[int]) -> list[tuple[int, int]]:
+    x = copy(tourA)
+    v = []
+    
+    # Perform a bubble sort
+    for i in range(num_cities-1):
+        num_swaps = 0
+        for j in range(0, num_cities - i - 1):
+            
+            # Find indexes in the linear order
+            index_i = tourB.index(x[j])
+            index_j = tourB.index(x[j + 1])
+            if index_i > index_j:
+                num_swaps += 1
+                
+                # Perform the swap
+                x[j], x[j + 1] = x[j + 1], x[j]
+                
+                # Append swap to velocity
+                v.append((j, j + 1))
+        
+        # Break if no swaps occurred in the pass
+        if not num_swaps:
+            break
+    
+    return v
 
+def scale_v(v: list[tuple[int, int]], gamma: float) -> list[tuple[int, int]]:
+    if 0 <= gamma <= 1:
+        return v[:math.floor(gamma * len(v))]
+    
+    if gamma > 1:
+        gamma_floor = math.floor(gamma)
+        return v * gamma_floor + scale_v(v, gamma - gamma_floor)
+        
+    return None
 
+def apply_v(current_tour: list[int], v: list[tuple[int, int]]) -> list[int]:
+    tour = copy(current_tour)
+    
+    # Sequentially apply all the swap operations in the velocity`
+    for x in v:
+        tour[x[0]], tour[x[1]] = tour[x[1]], tour[x[0]]
 
+    return tour
 
+def get_neighbourhood(ph: list[list[list[int]]], a: int) -> list[int]:
+    neighbourhood = []
+    
+    # Go through all particles
+    for b in range(num_parts):
+        if a == b:
+            # Ignore original particle
+            continue
+        
+        # Check if number of swaps between the two particle's tours are less than delta
+        if len(calc_v(ph[a][-1], ph[b][-1])) <= delta:
+            neighbourhood.append((ph[b][-1]))
+                
+    return neighbourhood
 
+def inertia(time: int) -> float:
+    # Linear inertia function
+    return (max_it - time) / max_it
 
+def PSO() -> list[int]:
+    # Initialise particle positions and velocities
+    p = [[get_random_tour()] for _ in range(num_parts)]
+    ph = copy(p)
+    v = [[get_random_velocity()] for _ in range(num_parts)]
 
+    # Calculate current best position
+    p_best = min(ph, key=lambda x: get_tour_length(x[0]))[0]
 
+    t = 0
+    while t < max_it:
+        for a in range(num_parts):
+            # Get the nearest particle
+            neighbourhood = get_neighbourhood(ph, a)
+            if neighbourhood:
+                nearest_particle = min(neighbourhood, key=lambda x: len(calc_v(ph[a][-1], x)))
+            
+            # Move the current particle
+            p[a].append(apply_v(p[a][-1], v[a][-1]))
+            
+            # Update the velocity
+            cognitive_velocity = scale_v(calc_v(p[a][-1], ph[a][-1]), alpha * epsilon1)
+            social_velocity = []
+            if neighbourhood:
+                social_velocity = scale_v(calc_v(p[a][-1], nearest_particle), beta * epsilon2)
+            v[a].append(scale_v(v[a][-1], inertia(t)) + cognitive_velocity + social_velocity)
+            
+            # Update best local solution found
+            if get_tour_length(p[a][-1]) < get_tour_length(ph[a][-1]):
+                ph[a].append(p[a][-1])
+            else:
+                ph[a].append(ph[a][-1])
+                
+        # Update best global solution found
+        best_tours = [p_best] + [ph[x][-1] for x in range(num_parts)]
+        p_best = min(best_tours, key=lambda x: get_tour_length(x))
 
+        t += 1
+        
+    return p_best
 
-
-
-
-
+tour = PSO()    
+tour_length = get_tour_length(tour)
 
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
