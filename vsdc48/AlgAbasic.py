@@ -352,8 +352,19 @@ added_note = ""
 ############ TOUR-FILE PRODUCED BY THIS CODE.
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
-  
+
 def heuristic(current_tour: list[int]) -> int:
+    """
+    Calculates the heuristic value of a given tour by sequentially visting all
+    unvisted cities in the tour.
+
+    Args:
+        current_tour (list[int]): The current tour
+
+    Returns:
+        int: The heuristic cost of the tour.
+
+    """
     # Identify unvisited cities
     N = len(dist_matrix)
     unvisited = set(range(N)).difference(set(current_tour))
@@ -365,6 +376,15 @@ def heuristic(current_tour: list[int]) -> int:
     return sum([dist_matrix[a][b] for (a,b) in actions])
 
 def AS(init_city: int) -> list[int]:
+    """
+    Performs an A* search to find the solution to the TSP problem
+
+    Args:
+        init_city (int): The initial (starting) city
+
+    Returns:
+        (list[int], int): The TSP tour and tour_length of the city set
+    """
     # Integral identifier
     new_id = 0
     
