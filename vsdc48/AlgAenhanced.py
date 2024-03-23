@@ -353,15 +353,89 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
+def heuristic2(current_tour: list[int]) -> int:
+    # This is a greedy heuristic and chooses the next shortest city
+    N = len(dist_matrix)
+    unvisited = list(set(range(N)).difference(set(current_tour)))
+    
+    # Initialise counters
+    hv = 0
+    current = current_tour[-1]
+    
+    # Iterate through all unvisited cities
+    while unvisited:
+        # Pick the city that is closest to the current
+        x = min(unvisited, key=lambda node: dist_matrix[current][node])
+        
+        # Add to the heuristic value, Move there, Remove from unvisited
+        hv += dist_matrix[current][x]
+        current = x
+        unvisited.remove(x)
+    
+    # Add the final jump to get to the original city
+    hv += dist_matrix[current][current_tour[0]]
+    
+    return hv
 
+def heuristic(current_tour: list[int]) -> int:
+    # Identify unvisited cities
+    N = len(dist_matrix)
+    unvisited = set(range(N)).difference(set(current_tour))
+    
+    # Generate all actions that sequentially travel to the remaining cities
+    actions = zip([current_tour[-1]] + list(unvisited), list(unvisited) + [current_tour[0]])
+    
+    # Sum the actions to get the heuristic cost
+    return sum([dist_matrix[a][b] for (a,b) in actions])
 
-
-
-
-
-
-
-
+def AS(init_city: int) -> list[int]:
+    # Check if there is only one city
+    N = len(dist_matrix)
+    if N == 1:
+        return [init_city], 0
+    
+    # Integral identifier
+    id = 0
+    
+    # Register the initial node
+    S, P, PC, D = [[init_city]], [None], [0], [0]
+    
+    # Add the initial node to the fringe
+    F = [(id, S[0], P[0], PC[0], D[0], heuristic2(S[0]))]
+    
+    # Iterate through nodes in the fringe
+    while F:
+        # Pop the node with minimal evaluation function
+        minimal_node = min(F, key=lambda x: x[5])
+        F.remove(minimal_node)
+        
+        # Find all reachable children
+        current_tour = minimal_node[1]
+        unvisited = set(range(N)).difference(set(current_tour))
+        
+        # Iterate through all children nodes
+        for unvisited_node in unvisited:
+            # Increment identifer
+            id += 1
+            
+            # Register the child node
+            S.append(current_tour + [unvisited_node])
+            P.append(minimal_node[0])
+            PC.append(minimal_node[3] + dist_matrix[current_tour[-1]][unvisited_node])
+            D.append(minimal_node[4] + 1)
+            
+            # If the child node is a goal state then return the tour and tour_length
+            if len(S[id]) == N:
+                tour = S[id]
+                return tour, PC[id] + dist_matrix[tour[-1]][tour[0]]
+            
+            # If it's not a goal state then add it to the fringe
+            f = PC[id] + heuristic2(S[id])
+            F.append((id, S[id], P[id], PC[id], D[id], f))
+    
+    return [], 0
+    
+tour, tour_length = AS(0)
 
 
 
