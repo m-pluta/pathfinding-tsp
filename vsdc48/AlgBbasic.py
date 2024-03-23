@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile012.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -352,33 +352,40 @@ added_note = ""
 ############ TOUR-FILE PRODUCED BY THIS CODE.
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
-
 from pprint import pprint as print
 from copy import copy
 import math
 import random
+from typing import List, Tuple
 
+#Global constants
 max_it = 1000   # Number of iterations
-num_parts = 5   # Number of particles
-delta = 4       # delta - determinant of neighbourhood
+num_parts = 10  # Number of particles
+delta = 5       # delta - determinant of neighbourhood
 alpha = 1       # cognitive learning factor
 beta = 1        # social learning factor
 epsilon1 = 1    # determines proximity
 epsilon2 = 1    # determines proximity
-
 num_cities = len(dist_matrix)
 
-def get_tour_length(tour: list[int]) -> int:
+# Type aliases
+Tour = List[int]
+Velocity = List[Tuple[int, int]]
+
+def swap(x: Tour, i1: int, i2: int) -> None:
+    x[i1], x[i2] = x[i2], x[i1]
+
+def get_tour_length(tour: Tour) -> int:
     edges = list(zip(tour, tour[1:] + [tour[0]]))
     return sum([dist_matrix[a][b] for (a,b) in edges])
 
-def get_random_tour() -> list[int]:
+def get_random_tour() -> Tour:
     return random.sample(range(num_cities), num_cities)
 
-def get_random_velocity(n_swaps: int = 5) -> list[tuple[int,int]]:
+def get_random_velocity(n_swaps: int = 5) -> Velocity:
     return [tuple(random.sample(range(num_cities), 2)) for _ in range(n_swaps)]
 
-def calc_v(tourA: list[int], tourB: list[int]) -> list[tuple[int, int]]:
+def calc_v(tourA: Tour, tourB: Tour) -> Velocity:
     x = copy(tourA)
     v = []
     
@@ -394,7 +401,7 @@ def calc_v(tourA: list[int], tourB: list[int]) -> list[tuple[int, int]]:
                 num_swaps += 1
                 
                 # Perform the swap
-                x[j], x[j + 1] = x[j + 1], x[j]
+                swap(x, j, j + 1)
                 
                 # Append swap to velocity
                 v.append((j, j + 1))
@@ -405,7 +412,7 @@ def calc_v(tourA: list[int], tourB: list[int]) -> list[tuple[int, int]]:
     
     return v
 
-def scale_v(v: list[tuple[int, int]], gamma: float) -> list[tuple[int, int]]:
+def scale_v(v: Velocity, gamma: float) -> Velocity:
     if 0 <= gamma <= 1:
         return v[:math.floor(gamma * len(v))]
     
@@ -415,16 +422,16 @@ def scale_v(v: list[tuple[int, int]], gamma: float) -> list[tuple[int, int]]:
         
     return None
 
-def apply_v(current_tour: list[int], v: list[tuple[int, int]]) -> list[int]:
+def apply_v(current_tour: Tour, v: Velocity) -> Tour:
     tour = copy(current_tour)
     
-    # Sequentially apply all the swap operations in the velocity`
+    # Sequentially apply all the swap operations in the velocity
     for x in v:
-        tour[x[0]], tour[x[1]] = tour[x[1]], tour[x[0]]
+        swap(tour, *x)
 
     return tour
 
-def get_neighbourhood(ph: list[list[list[int]]], a: int) -> list[int]:
+def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
     neighbourhood = []
     
     # Go through all particles
@@ -434,8 +441,8 @@ def get_neighbourhood(ph: list[list[list[int]]], a: int) -> list[int]:
             continue
         
         # Check if number of swaps between the two particle's tours are less than delta
-        if len(calc_v(ph[a][-1], ph[b][-1])) <= delta:
-            neighbourhood.append((ph[b][-1]))
+        if len(calc_v(ph[a], ph[b])) <= delta:
+            neighbourhood.append((ph[b]))
                 
     return neighbourhood
 
@@ -443,42 +450,44 @@ def inertia(time: int) -> float:
     # Linear inertia function
     return (max_it - time) / max_it
 
-def PSO() -> list[int]:
+def PSO() -> Tour:
     # Initialise particle positions and velocities
-    p = [[get_random_tour()] for _ in range(num_parts)]
+    p = [get_random_tour() for _ in range(num_parts)]
     ph = copy(p)
-    v = [[get_random_velocity()] for _ in range(num_parts)]
+    v = [get_random_velocity() for _ in range(num_parts)]
 
     # Calculate current best position
-    p_best = min(ph, key=lambda x: get_tour_length(x[0]))[0]
+    p_best = min(ph, key=lambda x: get_tour_length(x))
 
     t = 0
     while t < max_it:
         for a in range(num_parts):
             # Get the nearest particle
-            neighbourhood = get_neighbourhood(ph, a)
-            if neighbourhood:
-                nearest_particle = min(neighbourhood, key=lambda x: len(calc_v(ph[a][-1], x)))
+            n_hood = get_neighbourhood(ph, a)
+            if n_hood:
+                nearest_part = min(n_hood, key=lambda b: len(calc_v(ph[a], b)))
             
             # Move the current particle
-            p[a].append(apply_v(p[a][-1], v[a][-1]))
+            p_a = p[a]
+            p[a] = apply_v(p[a], v[a])
+            
+            # Calculate the cognitive & social velocities
+            cog_v = calc_v(p_a, ph[a])
+            cog_v = scale_v(cog_v, alpha * epsilon1)
+            
+            soc_v = []
+            if n_hood:
+                soc_v = calc_v(p_a, nearest_part)
+                soc_v = scale_v(soc_v, beta * epsilon2)
             
             # Update the velocity
-            cognitive_velocity = scale_v(calc_v(p[a][-1], ph[a][-1]), alpha * epsilon1)
-            social_velocity = []
-            if neighbourhood:
-                social_velocity = scale_v(calc_v(p[a][-1], nearest_particle), beta * epsilon2)
-            v[a].append(scale_v(v[a][-1], inertia(t)) + cognitive_velocity + social_velocity)
+            v[a] = scale_v(v[a], inertia(t)) + cog_v + soc_v
             
             # Update best local solution found
-            if get_tour_length(p[a][-1]) < get_tour_length(ph[a][-1]):
-                ph[a].append(p[a][-1])
-            else:
-                ph[a].append(ph[a][-1])
+            ph[a] = min(p[a], ph[a], key=lambda x: get_tour_length(x))
                 
         # Update best global solution found
-        best_tours = [p_best] + [ph[x][-1] for x in range(num_parts)]
-        p_best = min(best_tours, key=lambda x: get_tour_length(x))
+        p_best = min([p_best] + ph, key=lambda x: get_tour_length(x))
 
         t += 1
         
