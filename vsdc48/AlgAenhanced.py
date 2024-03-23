@@ -353,14 +353,19 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-def heuristic3(current_tour: list[int]) -> float:  
+from typing import List
+
+# Type alias
+Tour = List[int]
+
+def heuristic3(current_tour: Tour) -> float:  
     # This is a greedy heuristic and chooses the next shortest city
     N = len(dist_matrix)
     unvisited = list(set(range(N)).difference(set(current_tour)))
     
     return sum([dist_matrix[current_tour[-1]][x] for x in unvisited]) / len(unvisited)
 
-def heuristic2(current_tour: list[int], k: int) -> int:
+def heuristic2(current_tour: Tour, k: int) -> int:
     """
     Calculates the heuristic value of a given tour by greedily visiting at most 
     k unvisited cities by going to the next closest city
@@ -400,7 +405,7 @@ def heuristic2(current_tour: list[int], k: int) -> int:
     
     return hv
 
-def heuristic1(current_tour: list[int]) -> int:
+def heuristic1(current_tour: Tour) -> int:
     """
     Calculates the heuristic value of a given tour by sequentially visting all
     unvisted cities in the tour.
@@ -422,7 +427,7 @@ def heuristic1(current_tour: list[int]) -> int:
     # Sum the actions to get the heuristic cost
     return sum([dist_matrix[a][b] for (a,b) in actions])
 
-def AS(init_city: int) -> list[int]:
+def AS(init_city: int) -> Tour:
     """
     Performs an A* search to find the solution to the TSP problem
 

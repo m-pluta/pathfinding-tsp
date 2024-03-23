@@ -353,7 +353,12 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-def heuristic(current_tour: list[int]) -> int:
+from typing import List
+
+# Type alias
+Tour = List[int]
+
+def heuristic(current_tour: Tour) -> int:
     """
     Calculates the heuristic value of a given tour by sequentially visting all
     unvisted cities in the tour.
@@ -375,7 +380,7 @@ def heuristic(current_tour: list[int]) -> int:
     # Sum the actions to get the heuristic cost
     return sum([dist_matrix[a][b] for (a,b) in actions])
 
-def AS(init_city: int) -> list[int]:
+def AS(init_city: int) -> Tour:
     """
     Performs an A* search to find the solution to the TSP problem
 
