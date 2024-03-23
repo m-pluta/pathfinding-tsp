@@ -352,28 +352,67 @@ added_note = ""
 ############ TOUR-FILE PRODUCED BY THIS CODE.
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
+  
+def heuristic(current_tour: list[int]) -> int:
+    # Identify unvisited cities
+    N = len(dist_matrix)
+    unvisited = set(range(N)).difference(set(current_tour))
+    
+    # Generate all actions that sequentially travel to the remaining cities
+    actions = zip([current_tour[-1]] + list(unvisited), list(unvisited) + [current_tour[0]])
+    
+    # Sum the actions to get the heuristic cost
+    return sum([dist_matrix[a][b] for (a,b) in actions])
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def AS(init_city: int) -> list[int]:
+    # Integral identifier
+    new_id = 0
+    
+    # Register the initial node
+    S, P, A, PC, D = [[init_city]], [None], [None], [0], [0]
+    
+    # Add the initial node to the fringe
+    F = [(new_id, S[0], P[0], A[0], PC[0], D[0], heuristic(S[0]))]
+    
+    # Check if this node is a goal-node i.e. the tour contains all cities
+    N = len(dist_matrix)
+    if N == 1:
+        return S[0], 0
+    
+    # Iterate through nodes in the fringe
+    while F:
+        # Pop the node with minimal evaluation function
+        minimal_node = min(F, key=lambda x: x[6])
+        F.remove(minimal_node)
+        
+        # Find all reachable children
+        current_tour = minimal_node[1]
+        unvisited = set(range(N)).difference(set(current_tour))
+        
+        # Iterate through all children nodes
+        for unvisited_node in unvisited:
+            # Increment identifer
+            new_id += 1
+            
+            # Register the child node
+            S.append(current_tour + [unvisited_node])
+            P.append(minimal_node[0])
+            A.append(None)
+            PC.append(minimal_node[4] + dist_matrix[current_tour[-1]][unvisited_node])
+            D.append(minimal_node[5] + 1)
+            
+            # If the child node is a goal state then return the tour and tour_length
+            if len(S[new_id]) == N:
+                tour = S[new_id]
+                return tour, PC[new_id] + dist_matrix[tour[-1]][tour[0]]
+            
+            # If it's not a goal state then add it to the fringe
+            f = PC[new_id] + heuristic(S[new_id])
+            F.append((new_id, S[new_id], P[new_id], A[new_id], PC[new_id], D[new_id], f))
+    
+    return [], 0
+    
+tour, tour_length = AS(0)
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
