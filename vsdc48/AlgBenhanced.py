@@ -353,27 +353,189 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
+from pprint import pprint as print
+from copy import copy
+import math
+import random
+from typing import List, Tuple, Union
+
+
+#Global constants
+max_it = 100   # Number of iterations
+num_parts = 500  # Number of particles
+delta = 5       # delta - determinant of neighbourhood
+alpha = 1       # cognitive learning factor
+beta = 1        # social learning factor
+epsilon1 = 1    # determines proximity
+epsilon2 = 1    # determines proximity
+num_cities = len(dist_matrix)
+
+# Type aliases
+Tour = List[int]
+Velocity = List[Tuple[int, int]]
+
+@profile
+def swap(x: Tour, i1: int, i2: int) -> None:
+    x[i1], x[i2] = x[i2], x[i1]
+
+@profile
+def get_tour_length(tour: Tour) -> int:
+    edges = list(zip(tour, tour[1:] + [tour[0]]))
+    return sum([dist_matrix[a][b] for (a,b) in edges])
+
+@profile
+def get_random_tour() -> Tour:
+    return random.sample(range(num_cities), num_cities)
+
+@profile
+def get_random_velocity(n_swaps: int = 5) -> Velocity:
+    return [tuple(random.sample(range(num_cities), 2)) for _ in range(n_swaps)]
+
+@profile
+def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = sys.maxsize * 2 + 1) -> Union[Velocity, None]:
+    x = copy(tourA)
+    v = []
+    
+    pos = {tourB[i]: i for i in range(len(tourB))}
+    
+    # Perform a bubble sort
+    for i in range(num_cities-1):
+        num_swaps = 0
+        for j in range(0, num_cities - i - 1):
+            
+            # Check the values are corrert w.r.t the linear order
+            if pos[x[j]] > pos[x[j + 1]]:
+                num_swaps += 1
+                
+                # Perform the swap
+                swap(x, j, j + 1)
+                
+                # Append swap to velocity
+                v.append((j, j + 1))
+                
+                # Check if it has exceeded the number of allowed swaps
+                if len(v) > max_allowed_swaps:
+                    return None
+        
+        # Break if no swaps occurred in the pass
+        if not num_swaps:
+            break
+    
+    return v
+
+@profile
+def scale_v(v: Velocity, gamma: float) -> Union[Velocity, None]:
+    if 0 <= gamma <= 1:
+        return v[:math.floor(gamma * len(v))]
+    
+    if gamma > 1:
+        gamma_floor = math.floor(gamma)
+        return v * gamma_floor + scale_v(v, gamma - gamma_floor)
+        
+    return None
+
+@profile
+def apply_v(current_tour: Tour, v: Velocity) -> Tour:
+    tour = copy(current_tour)
+    
+    # Sequentially apply all the swap operations in the velocity
+    for x in v:
+        swap(tour, *x)
+
+    return tour
+
+@profile
+def get_nearest_particle(ph: List[Tour], a: int) -> Union[Tour, None]:
+    neighbours = ph[:a] + ph[a + 1:]
+    
+    closest = None
+    min = -1
+    for neighbour in neighbours:
+        swaps = calc_v(ph[a], neighbour, min)
+        if not swaps:
+            continue
+        
+        swaps = len(swaps)
+        
+        # Within proximity and either no current minimum or closer than current minimum
+        if swaps <= delta and (not closest or swaps < min):
+            closest = neighbour
+            min = swaps
+
+@profile
+def calc_cognitive_v(p_a: Tour, p_a_best: Tour) -> Velocity:
+    cognitive_v = calc_v(p_a, p_a_best)
+    return scale_v(cognitive_v, alpha * epsilon1)
+
+@profile
+def calc_social_v(p_a: Tour, n_a: Union[Tour, None]) -> Velocity:
+    social_v = []
+    if n_a:
+        social_v = calc_v(p_a, n_a)
+        social_v = scale_v(social_v, beta * epsilon2)
+    return social_v
+
+@profile
+def inertia(time: int) -> float:
+    # Linear inertia function
+    return (max_it - time) / max_it
+
+@profile
+def PSO() -> Tour:
+    # Initialise particle positions and velocities
+    p = [get_random_tour() for _ in range(num_parts)]
+    ph = copy(p)
+    v = [get_random_velocity() for _ in range(num_parts)]
+
+    t = 0
+    while t < max_it:
+        for a in range(num_parts):
+            # Get the nearest particle
+            nearest_particle = get_nearest_particle(ph, a)
+            
+            # Move the current particle
+            p_old = p[a]
+            p[a] = apply_v(p[a], v[a])
+            
+            # Calculate the cognitive & social velocities
+            cognitive_v = calc_cognitive_v(p_old, ph[a])
+            social_v = calc_social_v(p_old, nearest_particle)
+            
+            # Update the velocity
+            v[a] = scale_v(v[a], inertia(t)) + cognitive_v + social_v
+            
+            # Update best local solution found
+            ph[a] = min(p[a], ph[a], key=lambda x: get_tour_length(x))
+
+        t += 1
+        
+    return min(ph, key=lambda x: get_tour_length(x))
+
+
+# from line_profiler import LineProfiler
+
+# profiler = LineProfiler()
+# profiled_PSO = LineProfiler(PSO())
+
+# profiled_PSO()
+# profiler.print_stats()
 
 
 
+# import cProfile
+# import pstats
+
+# def f8_alt(x):
+#     return "%14.9f" % x
+# pstats.f8 = f8_alt
+
+# cProfile.run('tour = PSO()', 'profile_stats')
+# p = pstats.Stats('profile_stats')
+# p.sort_stats('tottime').print_stats()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+tour = PSO()
+tour_length = get_tour_length(tour)
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
