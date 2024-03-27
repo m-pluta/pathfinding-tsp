@@ -358,11 +358,12 @@ from copy import copy
 import math
 import random
 from typing import List, Tuple, Union
+from line_profiler import profile
 
 
 #Global constants
 max_it = 100   # Number of iterations
-num_parts = 500  # Number of particles
+num_parts = 25  # Number of particles
 delta = 5       # delta - determinant of neighbourhood
 alpha = 1       # cognitive learning factor
 beta = 1        # social learning factor
