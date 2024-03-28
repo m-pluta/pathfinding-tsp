@@ -362,7 +362,7 @@ from line_profiler import profile
 
 #Global constants
 max_it = 100   # Number of iterations
-num_parts = 100  # Number of particles
+num_parts = 25  # Number of particles
 delta = 5       # delta - determinant of neighbourhood
 alpha = 1       # cognitive learning factor
 beta = 1        # social learning factor
@@ -380,42 +380,44 @@ def get_tour_length(tour: Tour) -> int:
     return sum([dist_matrix[a][b] for (a,b) in edges])
 
 @profile
-def get_random_tour() -> Tour:
-    return random.sample(range(num_cities), num_cities)
+def get_random_tour(N: int = num_cities) -> Tour:
+    return random.sample(range(N), N)
 
 @profile
-def get_random_velocity(n_swaps: int = 5) -> Velocity:
-    return [tuple(random.sample(range(num_cities), 2)) for _ in range(n_swaps)]
+def get_random_velocity(N: int = num_cities, n_swaps: int = 10) -> Velocity:
+    return [tuple(random.sample(range(N), 2)) for _ in range(n_swaps)]
+
+@profile
+def normalise_v(v: Velocity) -> Velocity:
+    original = list(range(num_cities))
+    modified = apply_v(original, v)
+    return calc_v(original, modified)
 
 @profile
 def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = sys.maxsize * 2 + 1) -> Union[Velocity, None]:
-    x = copy(tourA)
+    tourX = copy(tourA)
+    idx_map = {val: idx for idx, val in enumerate(tourX)}
+    
     v = []
-    
-    pos = {tourB[i]: i for i in range(len(tourB))}
-    
-    # Perform a bubble sort
-    for i in range(num_cities-1):
-        num_swaps = 0
-        for j in range(0, num_cities - i - 1):
-            
-            # Check the values are corrert w.r.t the linear order
-            if pos[x[j]] > pos[x[j + 1]]:
-                num_swaps += 1
-                
-                # Perform the swap
-                x[j], x[j + 1] = x[j + 1], x[j]
-                
-                # Append swap to velocity
-                v.append((j, j + 1))
-                
-                # Check if it has exceeded the number of allowed swaps
-                if len(v) > max_allowed_swaps:
-                    return None
+    for i in range(num_cities):
+        if tourX[i] == tourB[i]:
+            continue
         
-        # Break if no swaps occurred in the pass
-        if not num_swaps:
-            break
+        correct = tourB[i]
+        correct_idx = idx_map[correct]
+                
+        # Swap elements
+        tourX[i], tourX[correct_idx] = tourX[correct_idx], tourX[i]
+        
+        # Update the index_map to reflect the swap.
+        idx_map[tourX[correct_idx]] = correct_idx
+        idx_map[correct] = i
+        
+        # Add swap to velocity
+        v.append((i, correct_idx))
+        
+        if len(v) > max_allowed_swaps:
+            return None
     
     return v
 
@@ -432,13 +434,13 @@ def scale_v(v: Velocity, gamma: float) -> Union[Velocity, None]:
 
 @profile
 def apply_v(current_tour: Tour, v: Velocity) -> Tour:
-    tour = copy(current_tour)
+    new_tour = copy(current_tour)
     
     # Sequentially apply all the swap operations in the velocity
-    for x in v:
-        tour[x[0]], tour[x[1]] = tour[x[1]], tour[x[0]]
+    for i1, i2 in v:
+        new_tour[i1], new_tour[i2] = new_tour[i2], new_tour[i1]
 
-    return tour
+    return new_tour
 
 @profile
 def get_nearest_particle(ph: List[Tour], a: int) -> Union[Tour, None]:
@@ -506,7 +508,6 @@ def PSO() -> Tour:
         t += 1
         
     return min(ph, key=lambda x: get_tour_length(x))
-
 
 tour = PSO()
 tour_length = get_tour_length(tour)
