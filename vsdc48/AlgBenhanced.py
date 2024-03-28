@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile012.txt"
+input_file = "AISearchfile058.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -355,15 +355,14 @@ added_note = ""
 
 from pprint import pprint as print
 from copy import copy
-import math
-import random
+from math import floor
 from typing import List, Tuple, Union
 from line_profiler import profile
 
 
 #Global constants
 max_it = 100   # Number of iterations
-num_parts = 25  # Number of particles
+num_parts = 100  # Number of particles
 delta = 5       # delta - determinant of neighbourhood
 alpha = 1       # cognitive learning factor
 beta = 1        # social learning factor
@@ -373,11 +372,7 @@ num_cities = len(dist_matrix)
 
 # Type aliases
 Tour = List[int]
-Velocity = List[Tuple[int, int]]
-
-@profile
-def swap(x: Tour, i1: int, i2: int) -> None:
-    x[i1], x[i2] = x[i2], x[i1]
+Velocity = List[Tuple[int, int]] 
 
 @profile
 def get_tour_length(tour: Tour) -> int:
@@ -409,7 +404,7 @@ def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = sys.maxsize * 2 + 
                 num_swaps += 1
                 
                 # Perform the swap
-                swap(x, j, j + 1)
+                x[j], x[j + 1] = x[j + 1], x[j]
                 
                 # Append swap to velocity
                 v.append((j, j + 1))
@@ -427,10 +422,10 @@ def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = sys.maxsize * 2 + 
 @profile
 def scale_v(v: Velocity, gamma: float) -> Union[Velocity, None]:
     if 0 <= gamma <= 1:
-        return v[:math.floor(gamma * len(v))]
+        return v[:floor(gamma * len(v))]
     
     if gamma > 1:
-        gamma_floor = math.floor(gamma)
+        gamma_floor = floor(gamma)
         return v * gamma_floor + scale_v(v, gamma - gamma_floor)
         
     return None
@@ -441,7 +436,7 @@ def apply_v(current_tour: Tour, v: Velocity) -> Tour:
     
     # Sequentially apply all the swap operations in the velocity
     for x in v:
-        swap(tour, *x)
+        tour[x[0]], tour[x[1]] = tour[x[1]], tour[x[0]]
 
     return tour
 
@@ -511,28 +506,6 @@ def PSO() -> Tour:
         t += 1
         
     return min(ph, key=lambda x: get_tour_length(x))
-
-
-# from line_profiler import LineProfiler
-
-# profiler = LineProfiler()
-# profiled_PSO = LineProfiler(PSO())
-
-# profiled_PSO()
-# profiler.print_stats()
-
-
-
-# import cProfile
-# import pstats
-
-# def f8_alt(x):
-#     return "%14.9f" % x
-# pstats.f8 = f8_alt
-
-# cProfile.run('tour = PSO()', 'profile_stats')
-# p = pstats.Stats('profile_stats')
-# p.sort_stats('tottime').print_stats()
 
 
 tour = PSO()
