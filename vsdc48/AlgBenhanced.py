@@ -361,14 +361,18 @@ from line_profiler import profile
 
 
 #Global constants
-max_it = 100   # Number of iterations
-num_parts = 25  # Number of particles
-delta = 5       # delta - determinant of neighbourhood
-alpha = 1       # cognitive learning factor
-beta = 1        # social learning factor
-epsilon1 = 1    # determines proximity
-epsilon2 = 1    # determines proximity
-num_cities = len(dist_matrix)
+MAXINT = sys.maxsize * 2 + 1
+max_it = 1000                   # Number of iterations
+num_parts = 50                  # Number of particles
+
+delta = 5                       # delta - determinant of neighbourhood
+alpha = 1                       # cognitive learning factor
+beta = 1                        # social learning factor
+epsilon1 = 1                    # determines proximity
+epsilon2 = 1                    # determines proximity
+
+i_max = 0.9
+i_min = 0.4
 
 # Type aliases
 Tour = List[int]
@@ -394,7 +398,7 @@ def normalise_v(v: Velocity) -> Velocity:
     return calc_v(original, modified)
 
 @profile
-def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = sys.maxsize * 2 + 1) -> Union[Velocity, None]:
+def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = MAXINT) -> Union[Velocity, None]:
     tourX = copy(tourA)
     idx_map = {val: idx for idx, val in enumerate(tourX)}
     
@@ -474,43 +478,49 @@ def calc_social_v(p_a: Tour, n_a: Union[Tour, None]) -> Velocity:
     return social_v
 
 @profile
-def inertia(time: int) -> float:
+def inertia(it: int) -> float:
     # Linear inertia function
-    return (max_it - time) / max_it
+    return (i_max - i_min) * ((max_it - it) / max_it) + i_min
 
 @profile
 def PSO() -> Tour:
     # Initialise particle positions and velocities
     p = [get_random_tour() for _ in range(num_parts)]
-    ph = copy(p)
     v = [get_random_velocity() for _ in range(num_parts)]
+    
+    # Calculate local and global bests
+    ph = [(tour, get_tour_length(tour)) for tour in p]
+    g_best = min(ph, key=lambda x: x[1])
 
-    t = 0
-    while t < max_it:
+    for it in range(max_it):
         for a in range(num_parts):
-            # Get the nearest particle
-            nearest_particle = get_nearest_particle(ph, a)
+            # # Get the nearest particle
+            # nearest_particle = get_nearest_particle(ph, a)
             
             # Move the current particle
             p_old = p[a]
             p[a] = apply_v(p[a], v[a])
             
             # Calculate the cognitive & social velocities
-            cognitive_v = calc_cognitive_v(p_old, ph[a])
-            social_v = calc_social_v(p_old, nearest_particle)
+            cognitive_v = calc_cognitive_v(p_old, ph[a][0])
+            social_v = calc_social_v(p_old, g_best[0])
             
             # Update the velocity
-            v[a] = scale_v(v[a], inertia(t)) + cognitive_v + social_v
+            v[a] = scale_v(v[a], inertia(it)) + cognitive_v + social_v
             
             # Update best local solution found
-            ph[a] = min(p[a], ph[a], key=lambda x: get_tour_length(x))
+            length = get_tour_length(p[a])
+            if length < ph[a][1]:
+                ph[a] = (p[a], length)
+                
+                if length < g_best[1]:
+                    g_best = ph[a]
+            
+            print(g_best[1])
 
-        t += 1
-        
-    return min(ph, key=lambda x: get_tour_length(x))
+    return g_best
 
-tour = PSO()
-tour_length = get_tour_length(tour)
+tour, tour_length = PSO()
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
