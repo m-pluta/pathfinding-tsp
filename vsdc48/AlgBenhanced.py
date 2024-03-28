@@ -363,13 +363,13 @@ from line_profiler import profile
 #Global constants
 MAXINT = sys.maxsize * 2 + 1
 max_it = 1000                   # Number of iterations
-num_parts = 50                  # Number of particles
+num_parts = 500                 # Number of particles
 
-delta = 5                       # delta - determinant of neighbourhood
-alpha = 1                       # cognitive learning factor
-beta = 1                        # social learning factor
+alpha = 0.3                     # cognitive learning factor
+beta = 0.3                      # social learning factor
 epsilon1 = 1                    # determines proximity
 epsilon2 = 1                    # determines proximity
+forget_chance = 2 / num_parts
 
 i_max = 0.9
 i_min = 0.4
@@ -383,11 +383,9 @@ def get_tour_length(tour: Tour) -> int:
     edges = list(zip(tour, tour[1:] + [tour[0]]))
     return sum([dist_matrix[a][b] for (a,b) in edges])
 
-@profile
 def get_random_tour(N: int = num_cities) -> Tour:
     return random.sample(range(N), N)
 
-@profile
 def get_random_velocity(N: int = num_cities, n_swaps: int = 10) -> Velocity:
     return [tuple(random.sample(range(N), 2)) for _ in range(n_swaps)]
 
@@ -398,7 +396,7 @@ def normalise_v(v: Velocity) -> Velocity:
     return calc_v(original, modified)
 
 @profile
-def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = MAXINT) -> Union[Velocity, None]:
+def calc_v(tourA: Tour, tourB: Tour, max_swaps: int = MAXINT) -> Velocity:
     tourX = copy(tourA)
     idx_map = {val: idx for idx, val in enumerate(tourX)}
     
@@ -420,8 +418,8 @@ def calc_v(tourA: Tour, tourB: Tour, max_allowed_swaps: int = MAXINT) -> Union[V
         # Add swap to velocity
         v.append((i, correct_idx))
         
-        if len(v) > max_allowed_swaps:
-            return None
+        if len(v) >= max_swaps:
+            return v
     
     return v
 
@@ -447,39 +445,17 @@ def apply_v(current_tour: Tour, v: Velocity) -> Tour:
     return new_tour
 
 @profile
-def get_nearest_particle(ph: List[Tour], a: int) -> Union[Tour, None]:
-    neighbours = ph[:a] + ph[a + 1:]
-    
-    closest = None
-    min = -1
-    for neighbour in neighbours:
-        swaps = calc_v(ph[a], neighbour, min)
-        if not swaps:
-            continue
-        
-        swaps = len(swaps)
-        
-        # Within proximity and either no current minimum or closer than current minimum
-        if swaps <= delta and (not closest or swaps < min):
-            closest = neighbour
-            min = swaps
-
-@profile
-def calc_cognitive_v(p_a: Tour, p_a_best: Tour) -> Velocity:
-    cognitive_v = calc_v(p_a, p_a_best)
+def calc_cognitive_v(p_a: Tour, p_best: Tour) -> Velocity:
+    cognitive_v = calc_v(p_a, p_best, 10)
     return scale_v(cognitive_v, alpha * epsilon1)
 
 @profile
-def calc_social_v(p_a: Tour, n_a: Union[Tour, None]) -> Velocity:
-    social_v = []
-    if n_a:
-        social_v = calc_v(p_a, n_a)
-        social_v = scale_v(social_v, beta * epsilon2)
-    return social_v
+def calc_social_v(p_a: Tour, g_best: Tour) -> Velocity:
+    social_v = calc_v(p_a, g_best, 10)
+    return scale_v(social_v, beta * epsilon2)
 
 @profile
 def inertia(it: int) -> float:
-    # Linear inertia function
     return (i_max - i_min) * ((max_it - it) / max_it) + i_min
 
 @profile
@@ -494,19 +470,21 @@ def PSO() -> Tour:
 
     for it in range(max_it):
         for a in range(num_parts):
-            # # Get the nearest particle
-            # nearest_particle = get_nearest_particle(ph, a)
+            # Calculate the cognitive & social velocities
+            cognitive_v = calc_cognitive_v(p[a], ph[a][0])
+            social_v = calc_social_v(p[a], g_best[0])
             
             # Move the current particle
-            p_old = p[a]
             p[a] = apply_v(p[a], v[a])
-            
-            # Calculate the cognitive & social velocities
-            cognitive_v = calc_cognitive_v(p_old, ph[a][0])
-            social_v = calc_social_v(p_old, g_best[0])
             
             # Update the velocity
             v[a] = scale_v(v[a], inertia(it)) + cognitive_v + social_v
+            
+            if len(v) > 10 * num_cities:
+                v[a] = normalise_v(v[a])
+            
+            if random.random() < forget_chance:
+                v[a] = get_random_velocity(n_swaps=len(v[a]))
             
             # Update best local solution found
             length = get_tour_length(p[a])
@@ -515,12 +493,11 @@ def PSO() -> Tour:
                 
                 if length < g_best[1]:
                     g_best = ph[a]
-            
-            print(g_best[1])
 
     return g_best
 
 tour, tour_length = PSO()
+
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
