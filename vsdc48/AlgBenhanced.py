@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile048.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -362,34 +362,30 @@ from line_profiler import profile
 
 #Global constants
 MAXINT = sys.maxsize * 2 + 1
-max_it = 100                   # Number of iterations
+max_it = 1000                   # Number of iterations
 num_parts = 500                 # Number of particles
 
 # Acceleration coefficients
-alpha = 0.3                     # cognitive learning factor
-beta = 0.3                      # social learning factor
-epsilon1 = 1                    # determines proximity
-epsilon2 = 1                    # determines proximity
+ALPHA = 0.3                     # cognitive learning factor
+BETA = 0.3                      # social learning factor
+EPSILON1 = 1                    # determines proximity
+EPSILON2 = 1                    # determines proximity
 
 # Inertia parameters
-i_max = 0.9
-i_min = 0.4
+I_MAX = 0.9
+I_MIN = 0.4
+
+# Run-time parameters
+ITER_CONVERGE = 200 
+
+# Forget 
+FORGET_ITER = 40
+FORGET_DAZE_ITER = 10
+
 
 # Type aliases
 Tour = List[int]
 Velocity = List[Tuple[int, int]]
-
-@profile
-def get_two_opt_tour_length(old_tour: Tour, best_length: int, i: int, j: int) -> int:
-    # Remove old edges
-    best_length -= dist_matrix[old_tour[i-1]][old_tour[i]]
-    best_length -= dist_matrix[old_tour[j-1]][old_tour[j]]
-
-    # Add new edges
-    best_length += dist_matrix[old_tour[i-1]][old_tour[j-1]]
-    best_length += dist_matrix[old_tour[i]][old_tour[j]]
-
-    return best_length
 
 @profile
 def two_opt(tour: Tour) -> Tour:
@@ -406,12 +402,19 @@ def two_opt(tour: Tour) -> Tour:
 
         for i in range(1, num_cities - 2):
             for j in range(i + 2, num_cities):
+                # Pre-calculate the length delta
+                length_delta = - dist_matrix[tour[i-1]][tour[i]] - dist_matrix[tour[j-1]][tour[j]] + dist_matrix[tour[i-1]][tour[j-1]] + dist_matrix[tour[i]][tour[j]]
+                
+                # If it doesn't improve the length of the current tour then skip
+                if length_delta >= 0:
+                    continue
+                
                 # Perform the 2opt
                 new_tour = tour[:]
                 new_tour[i:j] = tour[j - 1:i - 1:-1]
 
-                # Calculate new tour length - don't need to re-calculate the whole tour
-                new_tour_length = get_two_opt_tour_length(tour, tour_length, i, j)
+                # Calculate new tour length
+                new_tour_length = tour_length + length_delta
 
                 if new_tour_length < best_length:
                     # Update best tour found
@@ -436,7 +439,7 @@ def get_random_tour(n_cities: int = num_cities) -> Tour:
     return random.sample(range(n_cities), n_cities)
 
 @profile
-def get_random_velocity(n_cities: int = num_cities, n_swaps: int = 10) -> Velocity:
+def get_random_velocity(n_swaps: int = 10, n_cities: int = num_cities) -> Velocity:
     return [tuple(random.sample(range(n_cities), 2)) for _ in range(n_swaps)]
 
 @profile
@@ -494,17 +497,19 @@ def apply_v(current_tour: Tour, v: Velocity) -> Tour:
 @profile
 def calc_cognitive_v(p_a: Tour, p_best: Tour) -> Velocity:
     cognitive_v = calc_v(p_a, p_best)
-    return scale_v(cognitive_v, alpha * epsilon1)
+    return scale_v(cognitive_v, ALPHA * EPSILON1)
 
 @profile
 def calc_social_v(p_a: Tour, g_best: Tour) -> Velocity:
     social_v = calc_v(p_a, g_best)
-    return scale_v(social_v, beta * epsilon2)
+    return scale_v(social_v, BETA * EPSILON2)
 
 @profile
 def inertia(it: int) -> float:
     # Linear function from i_max to i_min
-    return (i_max - i_min) * ((max_it - it) / max_it) + i_min
+    return (I_MAX - I_MIN) * ((max_it - it) / max_it) + I_MIN
+
+import numpy as np
 
 @profile
 def PSO() -> Tour:
@@ -515,13 +520,31 @@ def PSO() -> Tour:
     # Calculate local and global bests
     p_best = [(tour, get_tour_length(tour)) for tour in p]
     g_best = min(p_best, key=lambda x: x[1])
-
+    
+    # Store when each particles was last updated and when the latest particle update was
+    # p_dazed = [0 for _ in range(num_parts)]
+    # p_updated = [-1 for _ in range(num_parts)]
+    updated = -1
+    
     for it in range(max_it):
+        print(it)
+        
+        # Break if none of the particles have advanced for a while
+        if it - updated > ITER_CONVERGE:
+            break
+        
         for a in range(num_parts):
             # Calculate the cognitive & social velocities
             cognitive_v = calc_cognitive_v(p[a], p_best[a][0])
             social_v = calc_social_v(p[a], g_best[0])
-
+            
+            # Dazing            
+            # if p_dazed[a] == 0:
+            #     social_v = calc_social_v(p[a], g_best[0])
+            # else:
+            #     social_v = []
+            #     p_dazed[a] -= 1
+                
             # Move the current particle
             p[a] = apply_v(p[a], v[a])
 
@@ -535,11 +558,23 @@ def PSO() -> Tour:
             # Update local best
             length = get_tour_length(p[a])
             if length < p_best[a][1]:
+                # Improve particle's solution using 2opt
                 p_best[a] = two_opt(p[a])
+                
+                # Store the update time
+                # p_updated[a] = it
+                updated = it 
 
                 # Update global best
                 if p_best[a][1] < g_best[1]:
                     g_best = p_best[a]
+            # else:
+            #     # If the particle hasn't advanced for a while then it gets 'dazed' and forgets where it is
+            #     if it - p_updated[a] > FORGET_ITER:
+            #         p[a] = get_random_tour()
+            #         v[a] = get_random_velocity(len(v[a]))
+            #         p_updated[a] = it
+            #         p_dazed[a] = FORGET_DAZE_ITER
 
     # Return global best
     return g_best
