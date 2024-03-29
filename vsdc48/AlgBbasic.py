@@ -355,8 +355,7 @@ added_note = ""
 
 from pprint import pprint as pprint
 from copy import deepcopy
-import math
-import random
+from math import floor
 from typing import List, Tuple, Union
 
 # Runtime constants
@@ -365,8 +364,6 @@ num_parts = 10                              # Number of particles
 
 # Neighbourhood Parameters
 delta = int(num_cities * num_cities * 1./4) # determinant of neighbourhood
-
-print(delta)
 
 # Acceleration coefficients
 inertia = 1
@@ -392,7 +389,7 @@ def get_random_velocity(n_swaps: int = 10, n_cities: int = num_cities) -> Veloci
     return [tuple(random.sample(range(n_cities), 2)) for _ in range(n_swaps)]
 
 def calc_v(tourA: Tour, tourB: Tour) -> Velocity:
-    """Calculates the velocity between `tourA` and `tourB`"""
+    """Calculates the velocity between `tourA` and `tourB` by performing a bubble-sort"""
     
     # Copy tourA and create an index map of tourB to speed up index requests
     tourX = tourA[:]
@@ -422,16 +419,16 @@ def calc_v(tourA: Tour, tourB: Tour) -> Velocity:
 
 def scale_v(v: Velocity, gamma: float) -> Union[Velocity, None]:
     """Scales a given velocity `v` by a given factor `gamma` using slicing"""
-    
+
     # Compute fractional portion of the velocity
     if 0 <= gamma <= 1:
-        return v[:math.floor(gamma * len(v))]
-    
+        return v[:floor(gamma * len(v))]
+
     # Compute the whole and fractional portion of the velocity
     if gamma > 1:
-        gamma_floor = math.floor(gamma)
+        gamma_floor = floor(gamma)
         return v * gamma_floor + scale_v(v, gamma - gamma_floor)
-    
+
     # Undefined for gamma <= 0
     return None
 
@@ -481,9 +478,9 @@ def PSO() -> Tour:
     
     # Initialise particle positions and velocities
     p = [get_random_tour() for _ in range(num_parts)]
-    p_best = deepcopy(p)
     v = [get_random_velocity() for _ in range(num_parts)]
 
+    p_best = deepcopy(p)
     # Calculate current best position
     g_best = min(p_best, key=lambda x: get_tour_length(x))
 
