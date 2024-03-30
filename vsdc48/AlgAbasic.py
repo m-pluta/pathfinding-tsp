@@ -353,34 +353,57 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from typing import List
+from typing import List, Tuple
+from line_profiler import profile
 
 # Type alias
 Tour = List[int]
 
-def heuristic(current_tour: Tour) -> int:
+@profile
+def heuristic_2_jump(tour: Tour) -> int:
+    unvisited = list(set(range(num_cities)).difference(set(tour)))
+    
+    if len(unvisited) == 1:
+        return dist_matrix[tour[-1]][unvisited[0]]
+    
+    paths = [(unvisited[i], unvisited[j]) for i in range(len(unvisited)) for j in range(len(unvisited)) if i != j]
+    
+    costs = [dist_matrix[tour[-1]][path[0]] + dist_matrix[path[0]][path[1]] for path in paths]
+    
+    return min(costs)
+
+@profile
+def heuristic_1_jump(tour: Tour) -> int:
+    unvisited = set(range(num_cities)).difference(set(tour))
+    
+    costs = [dist_matrix[tour[-1]][unvisited_node] for unvisited_node in unvisited]
+    
+    return min(costs)
+
+@profile
+def heuristic_nn_complete(tour: Tour) -> int:
     """
     Calculates the heuristic value of a given tour by sequentially visting all
-    unvisted cities in the tour.
+    unvisted cities in the tour. This is not admissable
 
     Args:
-        current_tour (list[int]): The current tour
+        tour (list[int]): The current tour
 
     Returns:
         int: The heuristic cost of the tour.
 
     """
     # Identify unvisited cities
-    N = len(dist_matrix)
-    unvisited = set(range(N)).difference(set(current_tour))
+    unvisited = set(range(num_cities)).difference(set(tour))
     
     # Generate all actions that sequentially travel to the remaining cities
-    actions = zip([current_tour[-1]] + list(unvisited), list(unvisited) + [current_tour[0]])
+    actions = zip([tour[-1]] + list(unvisited), list(unvisited) + [tour[0]])
     
     # Sum the actions to get the heuristic cost
-    return sum([dist_matrix[a][b] for (a,b) in actions])
+    return sum([dist_matrix[a][b] for a, b in actions])
 
-def AS(init_city: int) -> Tour:
+@profile
+def AS(init_city: int) -> Tuple[Tour, int]:
     """
     Performs an A* search to find the solution to the TSP problem
 
@@ -390,6 +413,9 @@ def AS(init_city: int) -> Tour:
     Returns:
         (list[int], int): The TSP tour and tour_length of the city set
     """
+    # Chosen heuristic
+    h = heuristic_nn_complete
+    
     # Integral identifier
     new_id = 0
     
@@ -397,11 +423,10 @@ def AS(init_city: int) -> Tour:
     S, P, A, PC, D = [[init_city]], [None], [None], [0], [0]
     
     # Add the initial node to the fringe
-    F = [(new_id, S[0], P[0], A[0], PC[0], D[0], heuristic(S[0]))]
+    F = [(new_id, S[0], P[0], A[0], PC[0], D[0], h(S[0]))]
     
     # Check if this node is a goal-node i.e. the tour contains all cities
-    N = len(dist_matrix)
-    if N == 1:
+    if num_cities == 1:
         return S[0], 0
     
     # Iterate through nodes in the fringe
@@ -412,27 +437,27 @@ def AS(init_city: int) -> Tour:
         
         # Find all reachable children
         current_tour = minimal_node[1]
-        unvisited = set(range(N)).difference(set(current_tour))
+        unvisited_nodes = set(range(num_cities)).difference(set(current_tour))
         
         # Iterate through all children nodes
-        for unvisited_node in unvisited:
+        for unvisited in unvisited_nodes:
             # Increment identifer
             new_id += 1
             
             # Register the child node
-            S.append(current_tour + [unvisited_node])
+            S.append(current_tour + [unvisited])
             P.append(minimal_node[0])
-            A.append(None)
-            PC.append(minimal_node[4] + dist_matrix[current_tour[-1]][unvisited_node])
+            A.append((current_tour[-1], unvisited))
+            PC.append(minimal_node[4] + dist_matrix[current_tour[-1]][unvisited])
             D.append(minimal_node[5] + 1)
             
             # If the child node is a goal state then return the tour and tour_length
-            if len(S[new_id]) == N:
+            if len(S[new_id]) == num_cities:
                 tour = S[new_id]
                 return tour, PC[new_id] + dist_matrix[tour[-1]][tour[0]]
             
             # If it's not a goal state then add it to the fringe
-            f = PC[new_id] + heuristic(S[new_id])
+            f = PC[new_id] + h(S[new_id])
             F.append((new_id, S[new_id], P[new_id], A[new_id], PC[new_id], D[new_id], f))
     
     return [], 0

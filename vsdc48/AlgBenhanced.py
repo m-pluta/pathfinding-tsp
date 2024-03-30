@@ -544,7 +544,6 @@ def PSO() -> Tour:
     updated = -1
     
     for it in range(max_it):
-        print(it)
         # Break if none of the particles have advanced for a while
         if it - updated > ITER_CONVERGE:
             break
