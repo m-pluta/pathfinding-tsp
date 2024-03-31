@@ -353,40 +353,70 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from typing import List
+from typing import List, Tuple
+from line_profiler import profile
+from heapq import heappush, heappop, heapify
 
 # Type alias
 Tour = List[int]
 
-def heuristic3(current_tour: Tour) -> float:  
-    # This is a greedy heuristic and chooses the next shortest city
-    N = len(dist_matrix)
-    unvisited = list(set(range(N)).difference(set(current_tour)))
+@profile
+def heuristic_2_jump(tour: Tour) -> int:
+    unvisited = list(set(range(num_cities)).difference(set(tour)))
     
-    return sum([dist_matrix[current_tour[-1]][x] for x in unvisited]) / len(unvisited)
+    if len(unvisited) == 1:
+        return dist_matrix[tour[-1]][unvisited[0]]
+    
+    paths = [(unvisited[i], unvisited[j]) for i in range(len(unvisited)) for j in range(len(unvisited)) if i != j]
+    
+    costs = [dist_matrix[tour[-1]][path[0]] + dist_matrix[path[0]][path[1]] for path in paths]
+    
+    return min(costs)
 
-def heuristic2(current_tour: Tour, k: int) -> int:
+@profile
+def heuristic_1_jump(tour: Tour) -> int:
+    unvisited = set(range(num_cities)).difference(set(tour))
+    
+    costs = [dist_matrix[tour[-1]][unvisited_node] for unvisited_node in unvisited]
+    
+    return min(costs)
+
+@profile
+def heuristic_average_nn(tour: Tour) -> float:
+    """Calculate the average cost of adding an unvisited node to the tour
+
+    Args:
+        tour (Tour): The current tour
+
+    Returns:
+        float: The average cost
+    """
+    # This is a greedy heuristic and chooses the next shortest city
+    unvisited = list(set(range(num_cities)).difference(set(tour)))
+    
+    return sum([dist_matrix[tour[-1]][x] for x in unvisited]) / len(unvisited)
+
+@profile
+def heuristic_k_nn(tour: Tour, k: int) -> int:
     """
     Calculates the heuristic value of a given tour by greedily visiting at most 
     k unvisited cities by going to the next closest city
 
     Args:
-        current_tour (list[int]): The current tour
+        tour (list[int]): The current tour
 
     Returns:
         int: The heuristic cost of the tour.
 
     """
-    
-    k = len(tour)
+    k = num_cities - len(tour)
     
     # This is a greedy heuristic and chooses the next shortest city
-    N = len(dist_matrix)
-    unvisited = list(set(range(N)).difference(set(current_tour)))
+    unvisited = list(set(range(num_cities)).difference(set(tour)))
     
     # Initialise counters
     hv = 0
-    current = current_tour[-1]
+    current = tour[-1]
     
     # Iterate through all unvisited cities
     while unvisited and k > 0:
@@ -401,33 +431,34 @@ def heuristic2(current_tour: Tour, k: int) -> int:
     
     if not unvisited:
         # Add the final jump to get to the original city
-        hv += dist_matrix[current][current_tour[0]]
+        hv += dist_matrix[current][tour[0]]
     
     return hv
 
-def heuristic1(current_tour: Tour) -> int:
+@profile
+def heuristic_nn_complete(tour: Tour) -> int:
     """
     Calculates the heuristic value of a given tour by sequentially visting all
-    unvisted cities in the tour.
+    unvisted cities in the tour. This is not admissable
 
     Args:
-        current_tour (list[int]): The current tour
+        tour (list[int]): The current tour
 
     Returns:
         int: The heuristic cost of the tour.
 
     """
     # Identify unvisited cities
-    N = len(dist_matrix)
-    unvisited = set(range(N)).difference(set(current_tour))
+    unvisited = set(range(num_cities)).difference(set(tour))
     
     # Generate all actions that sequentially travel to the remaining cities
-    actions = zip([current_tour[-1]] + list(unvisited), list(unvisited) + [current_tour[0]])
+    actions = zip([tour[-1]] + list(unvisited), list(unvisited) + [tour[0]])
     
     # Sum the actions to get the heuristic cost
-    return sum([dist_matrix[a][b] for (a,b) in actions])
+    return sum([dist_matrix[a][b] for a, b in actions])
 
-def AS(init_city: int) -> Tour:
+@profile
+def AS(init_city: int) -> Tuple[Tour, int]:
     """
     Performs an A* search to find the solution to the TSP problem
 
@@ -438,13 +469,14 @@ def AS(init_city: int) -> Tour:
         (list[int], int): The TSP tour and tour_length of the city set
     """
     # Check if there is only one city
-    N = len(dist_matrix)
-    if N == 1:
+    if num_cities == 1:
         return [init_city], 0
+    
+    # Chosen heuristic
+    h = heuristic_k_nn
     
     # Integral identifier
     id = 0
-    h = heuristic2
     
     # Register the initial node
     S, P, PC, D = [[init_city]], [None], [0], [0]
@@ -460,21 +492,21 @@ def AS(init_city: int) -> Tour:
         
         # Find all reachable children
         current_tour = minimal_node[1]
-        unvisited = set(range(N)).difference(set(current_tour))
+        unvisited_nodes = set(range(num_cities)).difference(set(current_tour))
         
         # Iterate through all children nodes
-        for unvisited_node in unvisited:
+        for unvisited in unvisited_nodes:
             # Increment identifer
             id += 1
             
             # Register the child node
-            S.append(current_tour + [unvisited_node])
+            S.append(current_tour + [unvisited])
             P.append(minimal_node[0])
-            PC.append(minimal_node[3] + dist_matrix[current_tour[-1]][unvisited_node])
+            PC.append(minimal_node[3] + dist_matrix[current_tour[-1]][unvisited])
             D.append(minimal_node[4] + 1)
             
             # If the child node is a goal state then return the tour and tour_length
-            if len(S[id]) == N:
+            if len(S[id]) == num_cities:
                 tour = S[id]
                 return tour, PC[id] + dist_matrix[tour[-1]][tour[0]]
             
