@@ -403,6 +403,7 @@ class RW_AS_Solver:
         
         # Integral identifier
         self.new_id: int = 0
+        self.MST: Dict[Tour, int] = dict()
         
         # Calculate initial node's values
         tour = (init_city,)
@@ -423,12 +424,56 @@ class RW_AS_Solver:
         # Increment ID
         self.new_id += 1
 
+
+    @profile
+    def compute_MST_cost(self, unvisited: Set) -> None:
+        num_nodes = len(unvisited)
+        
+        unvisited = list(unvisited)
+        
+        # Map unvisited nodes to their indices in the reduced matrix
+        node_index = {node: idx for idx, node in enumerate(unvisited)}
+        
+        # Create a min heap to store vertices not yet included in MST
+        minHeap = [(0, unvisited[0])]  # Start with the first unvisited node, arbitrary choice
+        in_mst = [False] * num_nodes  # To keep track of nodes already included in MST
+        key_values = [float('inf')] * num_nodes  # Key values used to pick minimum weight edge
+        key_values[0] = 0  # Make key value of the first node as 0 so that it is picked first
+        
+        mst_cost = 0  # To store the resultant MST cost
+        
+        while minHeap:
+            # Pick the minimum key vertex from the set of vertices not yet included in MST
+            key, u = heappop(minHeap)
+            
+            # If this node is already included in the MST, skip
+            if in_mst[node_index[u]]:
+                continue
+            
+            # Add the picked vertex to the MST
+            mst_cost += key
+            in_mst[node_index[u]] = True
+            
+            # Update the key value and parent index of the adjacent vertices of the picked vertex
+            for v in unvisited:
+                if v != u and not in_mst[node_index[v]]:  # Only consider unvisited nodes
+                    if dist_matrix[u][v] < key_values[node_index[v]]:
+                        key_values[node_index[v]] = dist_matrix[u][v]
+                        heappush(minHeap, (dist_matrix[u][v], v))
+
+        self.MST[tuple(sorted(unvisited))] = mst_cost
+
     @profile
     def heuristic(self, tour: Tour, unvisited: Set) -> int:
         if not unvisited:
             return dist_matrix[tour[-1]][tour[0]]
         
-        return min([dist_matrix[tour[-1]][u] for u in unvisited])
+        sorted_unvisited = tuple(sorted(unvisited))
+
+        if not sorted_unvisited in self.MST:
+            self.compute_MST_cost(unvisited)
+            
+        return 2 * self.MST[sorted_unvisited]
 
     @profile
     def add_to_fringe(self, node: Node) -> None:
@@ -482,6 +527,7 @@ class RW_AS_Solver:
                     
                     if child.f < self.sol_node[0]:
                         if len(child.tour) == num_cities:
+                            print(child.f)
                             self.sol_node = (child.f, child.tour)
                         elif (child.tour in self.O or child.tour in self.C) and child.g > n.g + action_cost:
                             if child.tour in self.C:
@@ -490,6 +536,7 @@ class RW_AS_Solver:
                         else:
                             self.add_to_fringe(child)        
 
+    @profile
     def get_best_tour(self) -> Solution:
         # Return the best solution found by the algorithm
         sol = self.sol_node
@@ -504,7 +551,7 @@ class RW_AS_Solver:
 
         return solver_thread.is_alive()
 
-solver = RW_AS_Solver(0, 2)
+solver = RW_AS_Solver(0, 1)
 
 solver.run_with_timeout(59)
 
