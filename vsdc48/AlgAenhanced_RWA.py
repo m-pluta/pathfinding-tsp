@@ -353,96 +353,165 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Set, Dict
 from line_profiler import profile
-from heapq import heappush, heappop, heapify
+from heapq import heappush, heapify
 from numpy import inf as INFINITY
+from threading import Thread
+from dataclasses import dataclass
 
-# Type alias
-Node = Tuple[int, List[int], int, int, int]  # f_w(n), tour, id, path_cost, depth
-HeapDict = Dict[float, List[Node]]
-Tour = List[int]
+# Type aliases
+Tour = CityList = List[int]
+HeapItem = Tuple[float, int]              # f_w(n), id
+HeapDict = Dict[float, List[HeapItem]]
+
+@dataclass
+class Node:
+    id: int
+    tour: Tour
+    unvisited: Set
+    path_cost: int
+    depth: int
+
+NodeDict = Dict[int, Node]
+
+
+def get_unvisited(tour: Tour) -> Set:
+    return set(range(num_cities)).difference(set(tour))
 
 @profile
-def heuristic(tour: Tour) -> int:
-    pass
+def get_tour_length(tour: Tour) -> int:
+    return sum(dist_matrix[tour[i]][tour[i-1]] for i in range(num_cities))
 
-@profile
-def add_to_fringe(heaps: HeapDict, tour: Tour, new_id: int, path_cost: int, depth: int) -> None:
-    for w, heap in heaps.values():
-        f = path_cost + w * heuristic(tour)
-        heappush(heap, (f, tour, new_id, path_cost, depth))
 
-def delete_from_fringe(heaps: HeapDict, node: Node) -> None:
-    pass
+class RW_AS_Solver:
+    @profile
+    def __init__(self, init_city: int = 0, W: List[int] = [1]) -> None:
+        # Ensure the solver contains an admissable heuristic
+        self.W: Set = set(W)
+        self.W.add(1)
 
-def peek(heaps: HeapDict, w: int) -> Node:
-    return heaps[w][0]
+        # Declare a node dict to store all registered (discovered) nodes
+        self.N: NodeDict = dict()
 
-@profile
-def RW_AS(init_city: int = 0, W: List[int] = [1]) -> Tour:
-    
-    W = [1] + list(set(W))  # Ensure algorithm is admissible
-
-    F = {w:[] for w in W}   # Declare the min-heap for each weight
-    Fs = F[1]               # The standard fringe (open-list)
-
-    C = set()               # Closed set
-    sol_node = None         # Current solution node
-    err = INFINITY          # The current error bound
-    
-    new_id = 0              # Integral identifier
-    d = dist_matrix         # Shorthand
-    
-    add_to_fringe(F, [init_city], new_id, 0, 0) # Add initial city to fringe
-    
-    while err > 0 and Fs:
-        w = random.sample(W, 1)
-        n = peek(F, w)
+        # Declare a min-heap for each weight, and the standard fringe (open_list)
+        self.F: HeapDict = {w:[] for w in self.W}
+        self.Fs = self.F[1]
         
-        delete_from_fringe(F, n)
+        # Define the closed set, current solution node, current error bound
+        self.C: Set = set()
+        self.sol_node: HeapItem = (INFINITY, None)
+        self.err: float = INFINITY
         
-        if not sol_node or n[0] < sol_node[0]:
-            C.add(n)
+        # Integral identifier
+        self.new_id: int = 0
+        
+        # Define the initial node
+        init_tour = [init_city]
+        init_unvisited = get_unvisited(init_tour)
+        init_node = Node(self.new_id, init_tour, init_unvisited, 0, 0)
+        
+        # Calculate it's heuristic cost
+        init_heuristic = self.heuristic(init_tour, init_unvisited)
+        
+        # Add it to the fringe (open-list)
+        self.add_to_fringe(init_node, init_heuristic)
+
+    @profile
+    def heuristic(self, tour: Tour, unvisited: CityList) -> int:
+        if not unvisited:
+            return dist_matrix[tour[-1]][tour[0]]
+        
+        return min([dist_matrix[tour[-1]][u] for u in unvisited])
+
+    @profile
+    def add_to_fringe(self, node: Node, h: int) -> None:
+        self.N[node.id] = node
+        
+        for w, heap in self.F.items():
+            f = node.path_cost + w * h
+            heappush(heap, (f, node.id))
+        
+        self.new_id += 1
+
+    @profile
+    def delete_from_fringe(self, id: int) -> None:
+        for heap in self.F.values():
+            for i, n in enumerate(heap):
+                if n[1] == id:
+                    heap[i] = heap[-1]
+                    heap.pop()
+                    heapify(heap)
+                    break
+
+    @profile
+    def peek(self, w: int) -> HeapItem:
+        return self.F[w][0]
+
+    @profile
+    def solve(self) -> None:
+        while self.err > 0 and self.Fs:
+            w = random.sample(self.W, 1)[0]
+            n_heap = self.peek(w)               # f_w(n), id
             
-            children = list(set(range(num_cities)).difference(set(n[1])))
+            self.delete_from_fringe(n_heap[1])
             
-            for c in children:
-                new_tour = n[1] + [c]
-                if n[3] + d[n[1][-1]][c] + heuristic(new_tour) < sol_node[0]:
-                    if len(new_tour) == num_cities:
-                        new_id += 1
-                        #TODO replace sol_node
-                        
-                    elif c in Fs or c in C: #TODO: what?
-                        if n[3] + d[n[1][-1]][c] < None: #TODO idk?
-                            if c in Fs: #TODO: what does this even mean
-                                delete_from_fringe(F, c)
-                            else:
-                                #TODO: Remove c from closed set
-                                pass
-                            
-                            #TODO: Add c to fringe
-                            pass
+            print(len(self.Fs))
+            
+            if n_heap[0] < self.sol_node[0]:
+                self.C.add(n_heap)
+                node = self.N[n_heap[1]]
+                
+                
+                for c in node.unvisited:
+                    c_tour = node.tour + [c]
+                    c_unvisited = node.unvisited - {c}
                     
-                    else:
-                        #TODO: Add c to fringe
-                        pass
+                    c_g = node.path_cost + dist_matrix[node.tour[-1]][c]
+                    c_h = self.heuristic(c_tour, c_unvisited)
+                    c_f = c_g + c_h
+                    
+                    if not self.sol_node or c_f < self.sol_node[0]:
+                        if len(c_tour) == num_cities:
+                            self.sol_node = (c_f, c_tour)
+                            print(self.sol_node)
+                            
+                        # elif c in self.Fs or c in self.C: #TODO: what?
+                        #     if c_g < None: #TODO idk?   
+                        #         if c in self.Fs: #TODO: what does this even mean
+                        #             self.delete_from_fringe(c)
+                        #         else:
+                        #             #TODO: Remove c from closed set
+                        #             pass
+                        #         new_node = Node(self.new_id, c_tour, c_unvisited, c_g, node.depth + 1)
+                        #         self.add_to_fringe(c_tour, new_node, c_h)
+                        
+                        else:
+                            new_node = Node(self.new_id, c_tour, c_unvisited, c_g, node.depth + 1)
+                            self.add_to_fringe(new_node, c_h)
             
-        err = sol_node[0] - peek(F, w)[0]
-    
-    return sol_node[1], sol_node[3] + d[sol_node[1][-1]][sol_node[1][0]]                   
-            
-            
-            
-            
-            
-        
-        
-    
-    
+            self.err = self.sol_node[0] - self.peek(1)[0]
 
-tour, tour_length = RW_AS(0, [1, 1.5, 2, 3, 4, 5])
+    def get_best_tour(self) -> Tuple[Tour, int]:
+        # Return the best solution found by the algorithm
+        sol = self.sol_node
+
+        return sol[1], sol[0]
+
+    @profile
+    def run_with_timeout(self, timeout: int = 59) -> bool:
+        # Run the solver for `timeout` number of seconds and return whether the solver timed otu
+        solver_thread = Thread(target=self.solve)
+        solver_thread.start()
+        solver_thread.join(timeout)
+
+        return solver_thread.is_alive()
+
+solver = RW_AS_Solver(0, [1, 1.5, 2, 3, 4, 5])
+
+solver.run_with_timeout(59)
+
+tour, tour_length = solver.get_best_tour()
 
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
