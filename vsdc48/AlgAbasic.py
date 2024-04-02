@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile012.txt"
+input_file = "AISearchfile175.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -353,35 +353,71 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from typing import List, Tuple
+from typing import List, Tuple, Callable
+from itertools import permutations
+from threading import Thread
 from line_profiler import profile
 
 # Type alias
-Tour = List[int]
+Tour = CityList = List[int]
+Action = Tuple[int, int]                            # source node, destination node
+Node = Tuple[int, Tour, int, Action, int, int, int] # id, state, parent, action, path_cost, depth, evaluation function value
+Solution = Tuple[Tour, int]                         # Tour, tour length
+Heuristic = Callable[[Tour], int]
 
+# Set of all cities
+ALL_CITIES = set(range(num_cities))
+
+# Algorithm for completing a partial tour using nearest-neighbour
+def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
+    unvisited = ALL_CITIES - set(tour)
+    
+    last_element, added_cities, added_cost = tour[-1], [], 0
+    while unvisited:
+        min_city = min(unvisited, key=lambda x: dist_matrix[last_element][x])
+        
+        added_cities += [min_city]
+        added_cost += dist_matrix[last_element][min_city]
+        
+        unvisited -= {min_city}
+        last_element = added_cities[-1]
+    
+    added_cost += dist_matrix[added_cities[-1]][tour[0]]
+    
+    return added_cities, added_cost
+
+# All decent heuristics
 @profile
 def heuristic_2_jump(tour: Tour) -> int:
-    unvisited = list(set(range(num_cities)).difference(set(tour)))
+    # Tour is complete
+    if len(tour) == num_cities:
+        return dist_matrix[tour[-1]][tour[0]]
     
+    # Might be able to only do a 1-jump
+    unvisited = list(ALL_CITIES - set(tour))
     if len(unvisited) == 1:
-        return dist_matrix[tour[-1]][unvisited[0]]
+        return dist_matrix[tour[-1]][unvisited[0]] + dist_matrix[unvisited[0]][tour[0]]
     
-    paths = [(unvisited[i], unvisited[j]) for i in range(len(unvisited)) for j in range(len(unvisited)) if i != j]
+    # Compute the all the possible 2-jumps
+    paths = permutations(unvisited, 2)
     
+    # Compute the cost of all the 2-jumps
     costs = [dist_matrix[tour[-1]][path[0]] + dist_matrix[path[0]][path[1]] for path in paths]
     
+    # Return the cost of the smallest 2-jump
     return min(costs)
 
 @profile
 def heuristic_1_jump(tour: Tour) -> int:
-    unvisited = set(range(num_cities)).difference(set(tour))
+    if len(tour) == num_cities:
+        return dist_matrix[tour[-1]][tour[0]]
     
-    costs = [dist_matrix[tour[-1]][unvisited_node] for unvisited_node in unvisited]
+    unvisited = ALL_CITIES - set(tour)
     
-    return min(costs)
+    return min([dist_matrix[tour[-1]][u] for u in unvisited])
 
 @profile
-def heuristic_nn_complete(tour: Tour) -> int:
+def heuristic_lex_complete(tour: Tour) -> int:
     """
     Calculates the heuristic value of a given tour by sequentially visting all
     unvisted cities in the tour. This is not admissable
@@ -394,75 +430,143 @@ def heuristic_nn_complete(tour: Tour) -> int:
 
     """
     # Identify unvisited cities
-    unvisited = set(range(num_cities)).difference(set(tour))
+    unvisited = list(ALL_CITIES - set(tour))
     
     # Generate all actions that sequentially travel to the remaining cities
-    actions = zip([tour[-1]] + list(unvisited), list(unvisited) + [tour[0]])
+    actions = zip([tour[-1]] + unvisited, unvisited + [tour[0]])
     
     # Sum the actions to get the heuristic cost
     return sum([dist_matrix[a][b] for a, b in actions])
 
 @profile
-def AS(init_city: int) -> Tuple[Tour, int]:
-    """
-    Performs an A* search to find the solution to the TSP problem
+def heuristic_nn_complete(tour: Tour) -> int:
+    return nn_complete_tour(tour)[1]
 
-    Args:
-        init_city (int): The initial (starting) city
 
-    Returns:
-        (list[int], int): The TSP tour and tour_length of the city set
-    """
-    # Chosen heuristic
-    h = heuristic_nn_complete
-    
-    # Integral identifier
-    new_id = 0
-    
-    # Register the initial node
-    S, P, A, PC, D = [[init_city]], [None], [None], [0], [0]
-    
-    # Add the initial node to the fringe
-    F = [(new_id, S[0], P[0], A[0], PC[0], D[0], h(S[0]))]
-    
-    # Check if this node is a goal-node i.e. the tour contains all cities
-    if num_cities == 1:
-        return S[0], 0
-    
-    # Iterate through nodes in the fringe
-    while F:
-        # Pop the node with minimal evaluation function
-        minimal_node = min(F, key=lambda x: x[6])
-        F.remove(minimal_node)
+class AS_Solver():
+    @profile
+    def __init__(self, init_city: int = 0, h: Heuristic = heuristic_lex_complete) -> None:
+        # Integral identifier and id of the solution node
+        self.new_id = 0
+        self.sol_id = None
         
-        # Find all reachable children
-        current_tour = minimal_node[1]
-        unvisited_nodes = set(range(num_cities)).difference(set(current_tour))
+        # Define the heuristic being used
+        self.h = h
         
-        # Iterate through all children nodes
-        for unvisited in unvisited_nodes:
-            # Increment identifer
-            new_id += 1
-            
-            # Register the child node
-            S.append(current_tour + [unvisited])
-            P.append(minimal_node[0])
-            A.append((current_tour[-1], unvisited))
-            PC.append(minimal_node[4] + dist_matrix[current_tour[-1]][unvisited])
-            D.append(minimal_node[5] + 1)
-            
-            # If the child node is a goal state then return the tour and tour_length
-            if len(S[new_id]) == num_cities:
-                tour = S[new_id]
-                return tour, PC[new_id] + dist_matrix[tour[-1]][tour[0]]
-            
-            # If it's not a goal state then add it to the fringe
-            f = PC[new_id] + h(S[new_id])
-            F.append((new_id, S[new_id], P[new_id], A[new_id], PC[new_id], D[new_id], f))
+        # Define the fringe and data arrays
+        self.F: List[Node] = []
+        self.S, self.P, self.A, self.PC, self.D = [], [], [], [], []
+        
+        # Register the initial node
+        init_id = self.register_node([init_city], None, None, 0, 0)
+        
+        # Add the initial node to the fringe
+        self.add_to_fringe(init_id)
     
-    return [], 0
+    @profile
+    def register_node(self, state: Tour, parent: int, action: Action, path_cost: int, depth: int) -> int:
+        registered_id = self.new_id
+        
+        self.S.append(state)
+        self.P.append(parent)
+        self.A.append(action)
+        self.PC.append(path_cost)
+        self.D.append(depth)
+        
+        self.new_id += 1
+        
+        return registered_id
+        
+    @profile
+    def add_to_fringe(self, id: int) -> None:
+        f = self.PC[id] + self.h(self.S[id])
+        
+        self.F.append(
+            (id,
+            self.S[id],
+            self.P[id],
+            self.A[id],
+            self.PC[id],
+            self.D[id],
+            f)
+        )
+        
+    @profile
+    def get_min_node(self) -> Node:
+        if self.F:
+            node = min(self.F, key=lambda x: x[6])
+            self.F.remove(node)
+            return node
+
+        return None
+
+    @profile
+    def solve(self) -> Tuple[Tour, int]:
+        """         
+        Performs an A* search to find the solution to the TSP problem
+
+        Args:
+            init_city (int): The initial (starting) city
+
+        Returns:
+            (list[int], int): The TSP tour and tour_length of the city set
+        """
+        # Iterate through nodes in the fringe
+        while self.F:
+            # Pop the node with minimal evaluation function
+            n = self.get_min_node()
+            
+            # Find all reachable children
+            tour = n[1]
+            unvisited = ALL_CITIES - set(tour)
+            
+            # Iterate through all children nodes
+            for c in unvisited:
+                # Register the child node
+                id = self.register_node(tour + [c], n[0], (tour[-1], c), n[4] + dist_matrix[tour[-1]][c], n[5] + 1)
+
+                # If the child node is a goal state then store it as the solution node
+                if len(self.S[id]) == num_cities:
+                    self.sol_id = id
+                    return
+                
+                # If it's not a goal state then add it to the fringe
+                self.add_to_fringe(id)
+
+        return
+
+    @profile
+    def get_best_tour(self) -> Solution:
+        # Return the best solution found by the algorithm
+        if self.sol_id:
+            sol_tour = self.S[self.sol_id]
+            return sol_tour, self.PC[self.sol_id] + dist_matrix[sol_tour[-1]][sol_tour[0]]
+        else:
+            # Pop a potential best node from fringe
+            min_node = self.get_min_node()
+            best_tour = min_node[1] if min_node else self.S[0]
+            best_length = min_node[4] if min_node else self.PC[0]
+                
+            # Complete the partial tour by using recursive nearest neighbour
+            added_cities, added_cost = nn_complete_tour(best_tour)
+            
+            return best_tour + added_cities, best_length + added_cost
+
+    @profile
+    def run_with_timeout(self, timeout: int = 59) -> bool:
+        # Run the solver for `timeout` number of seconds and return whether the solver timed otu
+        solver_thread = Thread(target=self.solve)
+        solver_thread.daemon = True
+        solver_thread.start()
+        solver_thread.join(timeout)
+
+        return solver_thread.is_alive()
     
-tour, tour_length = AS(0)
+solver = AS_Solver(0, heuristic_nn_complete)
+
+solver.run_with_timeout(59)
+
+tour, tour_length = solver.get_best_tour()
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
