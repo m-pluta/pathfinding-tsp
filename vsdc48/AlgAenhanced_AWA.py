@@ -361,9 +361,9 @@ from line_profiler import profile
 
 # Type aliases
 Tour = CityList = Tuple[int, ...]
-HeapItem = Tuple[float, Tour]   # f_w(n), tour of the node
+HeapItem = Tuple[float, Tour]   # f_w(n), tour
 Heap = List[HeapItem]
-Solution = Tuple[Tour, int]
+Solution = Tuple[Tour, int]     # Tour, f(n)
 
 # Define infinity, and the set of all cities
 INFINITY = float('inf')
@@ -378,8 +378,8 @@ class Node:
     f: int          # f(n) = g(n) + h(n)
     fp: float       # f'(n) = g(n) + h'(n)
 
-# Define data structure for open and closed lists
-NodeDict = Dict[Tour, Node]
+# Define data structure for the register
+Register = Dict[Tour, Node]
 
 @profile
 def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
@@ -476,22 +476,21 @@ class RW_AS_Solver:
             init_city (int, optional): The initial city where the solver starts from. Defaults to 0.
             w (int, optional): The weight of the heuristic in the evaluation function. Defaults to 2.
         """
-        # Define the open and closed lists
-        self.O: NodeDict = dict()
-        self.C: NodeDict = dict()
+        # Define the register
+        self.R: Register = dict()
         
         # Store init arguments
         self.init_city = init_city
         self.w = w
 
-        # Declare a min-heap for the open-list
+        # Declare a min-heap for the fringe
         self.F: Heap = []
         
         # Define a dict to store past computations of minimum spanning trees
-        self.MST: Dict[CityList, int] = dict()
+        self.mst_costs: Dict[CityList, int] = dict()
         
         # Define the current solution node
-        self.sol_node: Solution = (None, INFINITY)
+        self.sol: Solution = (None, INFINITY)
         
         # Integral node identifier
         self.new_id: int = 0
@@ -505,7 +504,7 @@ class RW_AS_Solver:
         node = Node(self.new_id, tour, unvisited, 0, h, w * h)
         self.new_id += 1
         
-        # Add it to the fringe (open-list)
+        # Add it to the fringe
         self.add_to_fringe(node)
 
     @profile
@@ -527,86 +526,65 @@ class RW_AS_Solver:
         unvisited = tuple(sorted(unvisited))
 
         # Compute the MST cost if it hasn't been computed before
-        if not unvisited in self.MST:
-            self.MST[unvisited] = compute_MST_cost(unvisited)
+        if not unvisited in self.mst_costs:
+            self.mst_costs[unvisited] = compute_MST_cost(unvisited)
 
         # Return the cost of the MST
-        return self.MST[unvisited]
+        return self.mst_costs[unvisited]
 
     @profile
     def add_to_fringe(self, node: Node) -> None:
-        """Adds a particular search node to the fringe (and open list)
+        """Adds a particular search node to the fringe
 
         Args:
             node (Node): The search node to be added to the fringe
         """
-        # Register the node in the open list        
-        self.O[node.tour] = node
+        # Register the node      
+        self.R[node.tour] = node
         
-        # Add the node to the fringe (min-heap)
+        # Add the node to the fringe
         heappush(self.F, (node.fp, node.tour))
-
-    @profile   
-    def pop_from_closed_list(self, tour: Tour) -> Node:
-        """Pops a given search node identified by its tour from the closed list
-
-        Args:
-            tour (Tour): The tour of the search node
-
-        Returns:
-            Node: The search node found in the closed list
-        """
-        return self.C.pop(tour)
 
     @profile
     def solve(self) -> None:
-        while self.O:
-            # Pop item from fringe (min-heap) with minimum evaluation value
+        while self.R:
+            # Pop tour from fringe with minimum evaluation value
             heap_item = heappop(self.F)
             
-            # Pop the node from the open list based on the tour found in the heap item
-            n: Node = self.O.pop(heap_item[1])
+            # Fetch the search node from the register
+            n: Node = self.R.pop(heap_item[1])
             
             # Only proceed if no solution found yet or if the evaluation function of popped node is better than the current best
-            if not self.sol_node[0] or n.f < self.sol_node[1]:
-                # Add the search node to the closed list
-                self.C[n.tour] = n
-                
+            if not self.sol[0] or n.f < self.sol[1]:
                 # Iterate through all children of the search node
                 for c in n.unvisited:
-                    # Compute values of the child searchnode
+                    # Compute values of the child search node
                     tour = n.tour + (c,)
                     unvisited = n.unvisited - {c}
                     cost = dist_matrix[n.tour[-1]][c]
                     g = n.g + cost
                     h = self.heuristic(tour, unvisited)
-                    
-                    # Define the child search node
-                    child = Node(self.new_id, tour, unvisited, g, g + h, g + self.w * h)
-                    self.new_id += 1
+                    f = g + h
                     
                     # Proceed if child's evaluation function is better than current best solution
-                    if child.f < self.sol_node[1]:
-                        if len(child.tour) == num_cities:
+                    if f < self.sol[1]:
+                        if len(tour) == num_cities:
                             # Save as solution node if it is a goal node
-                            print(child.f)
-                            self.sol_node = (child.tour, child.f)
-                        # elif (child.tour in self.O or child.tour in self.C) and child.g > n.g + cost:
-                        #     if child.tour in self.C:
-                        #         self.pop_from_closed_list(child.tour)
-                        #         self.add_to_fringe(child)
-                        elif child.tour in self.C:
-                            print("test")
-                            self.pop_from_closed_list(child.tour)
-                            self.add_to_fringe(child)
+                            print(f)
+                            self.sol = (tour, f)
                         else:
+                            # Define the child search node
+                            child = Node(self.new_id, tour, unvisited, g, f, g + self.w * h)
+                            self.new_id += 1
+                            
+                            # Add it to the fringe
                             self.add_to_fringe(child)        
 
     @profile
     def get_best_tour(self) -> Solution:
         # Return the best solution found by the algorithm
-        if self.sol_node[0]:
-            return list(self.sol_node[0]), self.sol_node[1]
+        if self.sol[0]:
+            return list(self.sol[0]), self.sol[1]
         else:
             best_tour = [0]
             best_length = 0
@@ -615,7 +593,7 @@ class RW_AS_Solver:
             min_node = self.F[0]
             if min_node:
                 best_tour = min_node[1]
-                best_length = self.O[best_tour].g
+                best_length = self.R[best_tour].g
             
             # Complete the partial tour by using recursive nearest neighbour
             added_cities, added_cost = nn_complete_tour(best_tour)
