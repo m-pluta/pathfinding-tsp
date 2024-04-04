@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile180.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -353,8 +353,8 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from math import floor
 from typing import List, Tuple, Union
+from math import floor
 from line_profiler import profile
 
 #Global constants
@@ -364,7 +364,7 @@ num_parts = 500                 # Number of particles
 
 # Acceleration coefficients
 ALPHA = 0.3                     # cognitive learning factor
-BETA = 0.3                      # social learning factor
+BETA = 1                        # social learning factor
 EPSILON1 = 1                    # determines proximity
 EPSILON2 = 1                    # determines proximity
 
@@ -380,8 +380,45 @@ FORGET_ITER = 40                # After how many iterations of no change do part
 FORGET_DAZE_ITER = 10           # How many iterations are the particles dazed for where they cant see any neighbours
 
 # Type aliases
-Tour = List[int]
+Tour = CityList = List[int]
 Velocity = List[Tuple[int, int]]
+Solution = Tuple[Tour, int]                         # Tour, tour length
+
+ALL_CITIES = set(range(num_cities))
+
+@profile
+def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
+    """Uses the nearest-neighbour algorithm to complete a partial `tour` and returns the cities and cost of completing the tour
+
+    Args:
+        tour (Tour): The partially completed tour
+
+    Returns:
+        Tuple[CityList, int]: Returns an tuple containing: an ordered list of the cities used to complete the tour and the cost of doing so
+    """
+    # Compute the unvisited cities
+    unvisited = ALL_CITIES - set(tour)
+    
+    # Declare vars to store the cities used to complete the tour and the cost of doing so
+    last_element, added_cities, added_cost = tour[-1], tuple(), 0
+    
+    # Keep iterating until
+    while unvisited:
+        # Find the next shortest edge
+        min_city = min(unvisited, key=lambda x: dist_matrix[last_element][x])
+        
+        # Add the edge to the running total
+        added_cities += (min_city,)
+        added_cost += dist_matrix[last_element][min_city]
+        
+        # Mark it as visited and set it as the last element
+        unvisited -= {min_city}
+        last_element = min_city
+    
+    # Add the final edge to the cost
+    added_cost += dist_matrix[added_cities[-1]][tour[0]]
+    
+    return added_cities, added_cost
 
 @profile
 def two_opt(tour: Tour) -> Tour:
@@ -427,6 +464,44 @@ def two_opt(tour: Tour) -> Tour:
         # Update best tour and length found in the previous iteration
         tour = best_tour
         tour_length = best_length
+
+    return best_tour, best_length
+
+@profile
+def two_opt_one_pass(tour: Tour) -> Tour:
+    """Performs 2-optimisation on a given `tour` to find an improvement only doing one pass"""
+    
+    # Best tour length after each 2 opt iteration
+    tour_length = get_tour_length(tour)
+
+    # Best tour found at any point in time
+    best_tour = tour
+    best_length = tour_length
+    
+    # Store local reference to dist matrix for faster computation and cleaner code
+    d = dist_matrix
+
+    # Iterate through all possible 2-edge swaps
+    for i in range(1, num_cities - 2):
+        for j in range(i + 2, num_cities):
+            # Pre-calculate the length delta
+            length_delta = - d[tour[i-1]][tour[i]] - d[tour[j-1]][tour[j]] + d[tour[i-1]][tour[j-1]] + d[tour[i]][tour[j]]
+            
+            # If it doesn't improve the length of the current tour then skip
+            if length_delta >= 0:
+                continue
+            
+            # Perform the 2-opt swap
+            new_tour = tour[:]
+            new_tour[i:j] = tour[j - 1:i - 1:-1]
+
+            # Calculate new tour length
+            new_tour_length = tour_length + length_delta
+
+            if new_tour_length < best_length:
+                # Update best tour found
+                best_tour = new_tour
+                best_length = new_tour_length
 
     return best_tour, best_length
 
@@ -544,11 +619,13 @@ def PSO() -> Tour:
     updated = -1
     
     for it in range(max_it):
+        print(it-updated)
         # Break if none of the particles have advanced for a while
         if it - updated > ITER_CONVERGE:
             break
         
         for a in range(num_parts):
+            print(a)
             # Calculate the cognitive & social velocities
             cognitive_v = calc_cognitive_v(p[a], p_best[a][0])
             social_v = calc_social_v(p[a], g_best[0])
