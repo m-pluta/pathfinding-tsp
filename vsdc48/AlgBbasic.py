@@ -353,13 +353,13 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from pprint import pprint as pprint
+from typing import List, Tuple, Union
+from threading import Thread
 from copy import deepcopy
 from math import floor
-from typing import List, Tuple, Union
 
 # Runtime constants
-max_it = 100                                # Number of iterations
+max_it = 10000                              # Number of iterations
 num_parts = 10                              # Number of particles
 
 # Neighbourhood Parameters
@@ -375,6 +375,7 @@ epsilon2 = 1                                # determines proximity
 # Type aliases
 Tour = List[int]
 Velocity = List[Tuple[int, int]]
+Solution = Tuple[Tour, int]                         # Tour, tour length
 
 def get_tour_length(tour: Tour) -> int:
     """Calculates the length of a given `tour`"""
@@ -443,6 +444,20 @@ def apply_v(tour: Tour, v: Velocity) -> Tour:
 
     return new_tour
 
+def calc_cognitive_v(p_a: Tour, p_best: Tour) -> Velocity:
+    """Calculates the cognitive velocity of a particle"""
+    cognitive_v = calc_v(p_a, p_best)
+    return scale_v(cognitive_v, alpha * epsilon1)
+
+def calc_social_v(p_a: Tour, n_a: Tour) -> Velocity:
+    """Calculates the social velocity of a particle"""
+    social_v = calc_v(p_a, n_a)
+    return scale_v(social_v, beta * epsilon2)
+
+def inertia(time: int) -> float:
+    """Linear inertia function going from 1 to 0"""
+    return (max_it - time) / max_it
+
 def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
     """Computes the neighbourhood of particle `a`, which is all the particles where the velocity to them is less than `delta` in length"""
     
@@ -459,65 +474,65 @@ def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
                 
     return n_hood
 
-def calc_cognitive_v(p_a: Tour, p_best: Tour) -> Velocity:
-    """Calculates the cognitive velocity of a particle"""
-    cognitive_v = calc_v(p_a, p_best)
-    return scale_v(cognitive_v, alpha * epsilon1)
-
-def calc_social_v(p_a: Tour, n_a: Tour) -> Velocity:
-    """Calculates the social velocity of a particle"""
-    social_v = calc_v(p_a, n_a)
-    return scale_v(social_v, beta * epsilon2)
-
-def inertia(time: int) -> float:
-    """Linear inertia function going from 1 to 0"""
-    return (max_it - time) / max_it
-
-def PSO() -> Tour:
-    """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
-    
-    # Initialise particle positions and velocities
-    p = [get_random_tour() for _ in range(num_parts)]
-    v = [get_random_velocity() for _ in range(num_parts)]
-
-    p_best = deepcopy(p)
-    # Calculate current best position
-    g_best = min(p_best, key=lambda x: get_tour_length(x))
-
-    t = 0
-    while t < max_it:
-        for a in range(num_parts):
-            # Find the nearest particle
-            n_hood = get_neighbourhood(p_best, a)
-            if n_hood:
-                nearest_part = min(n_hood, key=lambda b: get_tour_length(b))
-            
-            # Store old position and Move the current particle
-            p_a = p[a]
-            p[a] = apply_v(p[a], v[a])
-            
-            # Calculate the cognitive velocity
-            cognitive_v = calc_cognitive_v(p_a, p_best[a])
-            
-            # Calculate the social velocity
-            social_v = calc_social_v(p_a, nearest_part) if n_hood else []
-            
-            # Update the velocity
-            v[a] = scale_v(v[a], inertia(t)) + cognitive_v + social_v
-            
-            # Update local-best solution
-            p_best[a] = min(p[a], p_best[a], key=lambda x: get_tour_length(x))
-                
-        # Update global-best solution
-        g_best = min([g_best] + p_best, key=lambda x: get_tour_length(x))
-
-        t += 1
+class PSO_Solver:
+    def __init__(self) -> None:
         
-    return g_best
+        # Initialise particle positions and velocities
+        self.p = [get_random_tour() for _ in range(num_parts)]
+        self.v = [get_random_velocity() for _ in range(num_parts)]
 
-tour = PSO()    
-tour_length = get_tour_length(tour)
+        self.p_best = deepcopy(self.p)
+        # Calculate current best position
+        self.g_best = min(self.p_best, key=lambda x: get_tour_length(x))
+    
+    def solve(self) -> Tour:
+        """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
+        t = 0
+        while t < max_it:
+            for a in range(num_parts):
+                # Find the nearest particle
+                n_hood = get_neighbourhood(self.p_best, a)
+                if n_hood:
+                    nearest_part = min(n_hood, key=lambda b: get_tour_length(b))
+                
+                # Store old position and Move the current particle
+                p_a = self.p[a]
+                self.p[a] = apply_v(self.p[a], self.v[a])
+                
+                # Calculate the cognitive velocity
+                cognitive_v = calc_cognitive_v(p_a, self.p_best[a])
+                
+                # Calculate the social velocity
+                social_v = calc_social_v(p_a, nearest_part) if n_hood else []
+                
+                # Update the velocity
+                self.v[a] = scale_v(self.v[a], inertia(t)) + cognitive_v + social_v
+                
+                # Update local-best solution
+                self.p_best[a] = min(self.p[a], self.p_best[a], key=lambda x: get_tour_length(x))
+                    
+            # Update global-best solution
+            self.g_best = min([self.g_best] + self.p_best, key=lambda x: get_tour_length(x))
 
+            t += 1
+
+    def get_best_tour(self) -> Solution:
+        return self.g_best, get_tour_length(self.g_best)
+
+    def run_with_timeout(self, timeout: int = 59) -> bool:
+        # Run the solver for `timeout` number of seconds and return whether the solver timed otu
+        solver_thread = Thread(target=self.solve)
+        solver_thread.daemon = True
+        solver_thread.start()
+        solver_thread.join(timeout)
+
+        return solver_thread.is_alive()
+    
+solver = PSO_Solver()
+
+solver.run_with_timeout(59)
+
+tour, tour_length = solver.get_best_tour()
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
