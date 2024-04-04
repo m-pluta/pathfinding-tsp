@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile100.175.txt"
+input_file = "AISearchfile058.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -382,6 +382,54 @@ class Node:
 Register = Dict[Tour, Node]
 
 @profile
+def two_opt(tour: Tour, current_length: int) -> Tour:
+    """Performs 2-optimisation on a given `tour` to find an improvement"""
+    
+    # Best tour length after each 2 opt iteration
+    tour = list(tour)
+    tour_length = current_length
+
+    # Best tour found at any point in time
+    best_tour = tour
+    best_length = tour_length
+
+    improved = True
+    while improved:
+        # Exits out the while if no improvement was found
+        improved = False
+
+        # Iterate through all possible 2-edge swaps
+        for i in range(1, num_cities - 2):
+            for j in range(i + 2, num_cities):
+                # Pre-calculate the length delta
+                length_delta = - dist_matrix[tour[i-1]][tour[i]] - dist_matrix[tour[j-1]][tour[j]] + dist_matrix[tour[i-1]][tour[j-1]] + dist_matrix[tour[i]][tour[j]]
+                
+                # If it doesn't improve the length of the current tour then skip
+                if length_delta >= 0:
+                    continue
+                
+                # Perform the 2-opt swap
+                new_tour = tour[:]
+                new_tour[i:j] = tour[j - 1:i - 1:-1]
+
+                # Calculate new tour length
+                new_tour_length = tour_length + length_delta
+
+                if new_tour_length < best_length:
+                    # Update best tour found
+                    best_tour = new_tour
+                    best_length = new_tour_length
+
+                    # Continue 2-opt
+                    improved = True
+
+        # Update best tour and length found in the previous iteration
+        tour = best_tour
+        tour_length = best_length
+
+    return tuple(best_tour), best_length
+
+@profile
 def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     """Uses the nearest-neighbour algorithm to complete a partial `tour` and returns the cities and cost of completing the tour
 
@@ -467,7 +515,7 @@ def compute_MST_cost(unvisited: CityList) -> int:
                 
     return mst_cost
 
-class RW_AS_Solver:
+class AWA_AS_Solver:
     @profile
     def __init__(self, init_city: int = 0, w: int = 2) -> None:
         """Constructor for the enhanced A* Solver
@@ -570,8 +618,9 @@ class RW_AS_Solver:
                     if f < self.sol[1]:
                         if len(tour) == num_cities:
                             # Save as solution node if it is a goal node
-                            print(f)
-                            self.sol = (tour, f)
+                            print(self.w, f)
+                            self.sol = two_opt(tour, f)
+                            print(f"improved = {self.sol[1]}")
                         else:
                             # Define the child search node
                             child = Node(self.new_id, tour, unvisited, g, f, g + self.w * h)
@@ -601,20 +650,40 @@ class RW_AS_Solver:
             return list(best_tour + added_cities), best_length + added_cost
 
     @profile
-    def run_with_timeout(self, timeout: int = 59) -> bool:
-        # Run the solver for `timeout` number of seconds and return whether the solver timed otu
+    def run_with_timeout(self, timeout: int = 59) -> None:
+        # Run the solver for `timeout` number of seconds
         solver_thread = Thread(target=self.solve)
         solver_thread.daemon = True
         solver_thread.start()
         solver_thread.join(timeout)
 
-        return solver_thread.is_alive()
 
-solver = RW_AS_Solver(init_city=0, w=2)
+solvers: List[AWA_AS_Solver] = []
+threads: List[Thread] = []
 
-solver.run_with_timeout(15)
+for w in (1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 7.5, 10):
+    solvers.append(AWA_AS_Solver(init_city=random.randint(0, num_cities - 1), w=w))
 
-tour, tour_length = solver.get_best_tour()
+for solver in solvers:
+    print("test")
+    solver_thread = Thread(target=solver.run_with_timeout, args=(55,))
+    solver_thread.daemon = True
+    solver_thread.start()
+    threads.append(solver_thread)
+    
+for thread in threads:
+    thread.join()
+
+sols = [solver.get_best_tour() for solver in solvers]
+
+tour, tour_length = min(sols, key=lambda x: x[1])
+
+
+# solver = AWA_AS_Solver(init_city=0, w=2)
+
+# solver.run_with_timeout(15)
+
+# tour, tour_length = solver.get_best_tour()
 
 
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
