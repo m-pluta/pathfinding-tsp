@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile180.txt"
+input_file = "AISearchfile175.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -354,12 +354,14 @@ added_note = ""
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
 from typing import List, Tuple, Union
+from dataclasses import dataclass
+from threading import Thread
 from math import floor
 from line_profiler import profile
 
 #Global constants
 MAXINT = sys.maxsize * 2 + 1
-max_it = 1000                   # Number of iterations
+max_it = 100_000_000            # Number of iterations
 num_parts = 500                 # Number of particles
 
 # Acceleration coefficients
@@ -369,22 +371,31 @@ EPSILON1 = 1                    # determines proximity
 EPSILON2 = 1                    # determines proximity
 
 # Inertia parameters
-I_START = 0.9                   # Starting value of inertia function
-I_END = 0.4                     # Ending value of inertia function
+INERTIA_START = 1
+INERTIA_RATIO = 0.9999
 
-# Run-time parameters
-ITER_CONVERGE = 200             # How many iterations without change is deemed as converged
+# Extinction
+EXTINCTION_ITER = 200           # If no changes after this many iterations then extinction
 
 # Forget 
 FORGET_ITER = 40                # After how many iterations of no change do particles forget where they are
 FORGET_DAZE_ITER = 10           # How many iterations are the particles dazed for where they cant see any neighbours
 
+ALL_CITIES = set(range(num_cities))
+
 # Type aliases
 Tour = CityList = List[int]
 Velocity = List[Tuple[int, int]]
-Solution = Tuple[Tour, int]                         # Tour, tour length
+Solution = Tuple[Tour, int]      # Tour, tour length
 
-ALL_CITIES = set(range(num_cities))
+@dataclass
+class Particle:
+    p: Tour
+    v: Velocity
+    p_best: Tuple[Tour, int]
+    last_update: int
+    dazed: bool
+    daze_expire: int
 
 @profile
 def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
@@ -400,7 +411,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     unvisited = ALL_CITIES - set(tour)
     
     # Declare vars to store the cities used to complete the tour and the cost of doing so
-    last_element, added_cities, added_cost = tour[-1], tuple(), 0
+    last_element, added_cities, added_cost = tour[-1], [], 0
     
     # Keep iterating until
     while unvisited:
@@ -408,7 +419,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
         min_city = min(unvisited, key=lambda x: dist_matrix[last_element][x])
         
         # Add the edge to the running total
-        added_cities += (min_city,)
+        added_cities += [min_city]
         added_cost += dist_matrix[last_element][min_city]
         
         # Mark it as visited and set it as the last element
@@ -445,15 +456,15 @@ def two_opt(tour: Tour) -> Tour:
                 # If it doesn't improve the length of the current tour then skip
                 if length_delta >= 0:
                     continue
-                
-                # Perform the 2-opt swap
-                new_tour = tour[:]
-                new_tour[i:j] = tour[j - 1:i - 1:-1]
 
                 # Calculate new tour length
                 new_tour_length = tour_length + length_delta
 
                 if new_tour_length < best_length:
+                    # Perform the 2-opt swap
+                    new_tour = tour[:]
+                    new_tour[i:j] = tour[j - 1:i - 1:-1]
+                    
                     # Update best tour found
                     best_tour = new_tour
                     best_length = new_tour_length
@@ -491,14 +502,14 @@ def two_opt_one_pass(tour: Tour) -> Tour:
             if length_delta >= 0:
                 continue
             
-            # Perform the 2-opt swap
-            new_tour = tour[:]
-            new_tour[i:j] = tour[j - 1:i - 1:-1]
-
             # Calculate new tour length
             new_tour_length = tour_length + length_delta
 
             if new_tour_length < best_length:
+                # Perform the 2-opt swap
+                new_tour = tour[:]
+                new_tour[i:j] = tour[j - 1:i - 1:-1]
+                
                 # Update best tour found
                 best_tour = new_tour
                 best_length = new_tour_length
@@ -511,14 +522,32 @@ def get_tour_length(tour: Tour) -> int:
     return sum(dist_matrix[tour[i]][tour[i-1]] for i in range(num_cities))
 
 @profile
-def get_random_tour(n_cities: int = num_cities) -> Tour:
-    """Returns a random tour containing `n_cities` number of cities"""
-    return random.sample(range(n_cities), n_cities)
+def generate_tour(partial_length: int = 2) -> Tour:
+    partial = random.sample(ALL_CITIES, partial_length)
+    
+    added_cities, _ = nn_complete_tour(partial)
+    
+    return partial + added_cities
 
 @profile
-def get_random_velocity(n_swaps: int = 10, n_cities: int = num_cities) -> Velocity:
+def generate_velocity(n_swaps: int = 5, n_cities: int = num_cities) -> Velocity:
     """Returns a random velocity containing `n_swaps` number of swaps across `n_cities` number of cities"""
+    if n_swaps == 0:
+        return []
+    
     return [tuple(random.sample(range(n_cities), 2)) for _ in range(n_swaps)]
+
+@profile
+def generate_particle() -> Particle:
+    tour = generate_tour()
+    tour, tour_length = two_opt_one_pass(tour)
+    velocity = generate_velocity()
+    
+    return Particle(tour, velocity, (tour, tour_length), 0, False, 0)
+
+@profile
+def generateAllParticles() -> List[Particle]:
+    return [generate_particle() for _ in range(num_parts)]
 
 @profile
 def normalise_v(v: Velocity) -> Velocity:
@@ -598,62 +627,85 @@ def calc_social_v(p_a: Tour, g_best: Tour) -> Velocity:
     social_v = calc_v(p_a, g_best)
     return scale_v(social_v, BETA * EPSILON2)
 
-@profile
-def inertia(it: int) -> float:
-    """Linear inertia function going from `I_START` to `I_END`"""
-    return (I_START - I_END) * ((max_it - it) / max_it) + I_END
-
-@profile
-def PSO() -> Tour:
-    """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
-
-    # Initialise particle positions and velocities
-    p = [get_random_tour() for _ in range(num_parts)]
-    v = [get_random_velocity() for _ in range(num_parts)]
-
-    # Calculate local and global bests
-    p_best = [(tour, get_tour_length(tour)) for tour in p]
-    g_best = min(p_best, key=lambda x: x[1])
-    
-    # Last time any update occurred
-    updated = -1
-    
-    for it in range(max_it):
-        print(it-updated)
-        # Break if none of the particles have advanced for a while
-        if it - updated > ITER_CONVERGE:
-            break
+class PSO_Solver:
+    @profile
+    def solve(self) -> Tour:
+        """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
         
-        for a in range(num_parts):
-            print(a)
-            # Calculate the cognitive & social velocities
-            cognitive_v = calc_cognitive_v(p[a], p_best[a][0])
-            social_v = calc_social_v(p[a], g_best[0])
+        # Generate all the particles
+        parts: List[Particle] = generateAllParticles()
+
+        # Calculate global best
+        g_best = min(parts, key=lambda p: p.p_best[1]).p_best
+        self.g_best = g_best
+        
+        last_global_update = -1
+        
+        inertia = INERTIA_START
+        it = 0
+        
+        while g_best[1] != 12150:
+            if it - last_global_update > EXTINCTION_ITER:
+                print("EXTINCTION")
+                parts = generateAllParticles()
+                last_global_update, it, inertia = 0, 0, INERTIA_START
             
-            # Move the current particle
-            p[a] = apply_v(p[a], v[a])
+            inertia *= INERTIA_RATIO
+                
+            for a in range(num_parts):
+                # print(str(it).ljust(4), a)
+                # Calculate the cognitive & social velocities
+                cognitive_v = calc_cognitive_v(parts[a].p, parts[a].p_best[0])
+                social_v = calc_social_v(parts[a].p, g_best[0])
+                
+                # Move the current particle
+                parts[a].p = apply_v(parts[a].p, parts[a].v)
 
-            # Update the velocity
-            v[a] = scale_v(v[a], inertia(it)) + cognitive_v + social_v
+                # Update the velocity
+                parts[a].v = scale_v(parts[a].v, inertia) + cognitive_v + social_v
 
-            # Normalise if velocity is too large
-            if len(v[a]) > 2.5 * num_cities:
-                v[a] = normalise_v(v[a])
+                # Normalise if velocity is too large
+                if len(parts[a].v) > 2.5 * num_cities:
+                    parts[a].v = normalise_v(parts[a].v)
 
-            # Update local best
-            length = get_tour_length(p[a])
-            if length < p_best[a][1]:
-                # Improve particle's solution using 2opt
-                p_best[a] = two_opt(p[a])
+                # Update local best
+                length = get_tour_length(parts[a].p)
+                if length < parts[a].p_best[1]:
+                    # Improve particle's solution using 2opt
+                    parts[a].p_best = two_opt(parts[a].p)
+                    
+                    parts[a].last_update = it
+                    last_global_update = it
 
-                # Update global best
-                if p_best[a][1] < g_best[1]:
-                    g_best = p_best[a]
+                    # Update global best
+                    if parts[a].p_best[1] < g_best[1]:
+                        g_best = parts[a].p_best
+                        
+                        if g_best[1] < self.g_best[1]:
+                            self.g_best = g_best
+                            print(self.g_best[1])
 
-    # Return global best
-    return g_best
+            it += 1
 
-tour, tour_length = PSO()
+    @profile
+    def get_best_tour(self) -> Solution:
+        return self.g_best
+
+    @profile
+    def run_with_timeout(self, timeout: int = 59) -> bool:
+        # Run the solver for `timeout` number of seconds and return whether the solver timed otu
+        solver_thread = Thread(target=self.solve)
+        solver_thread.daemon = True
+        solver_thread.start()
+        solver_thread.join(timeout)
+
+        return solver_thread.is_alive()
+    
+solver = PSO_Solver()
+
+solver.run_with_timeout(60 * 80)
+
+tour, tour_length = solver.get_best_tour()
 
 ########### Testing when to normalise
 
