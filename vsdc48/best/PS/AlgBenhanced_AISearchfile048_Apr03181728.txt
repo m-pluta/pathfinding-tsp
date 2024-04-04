@@ -1,0 +1,7 @@
+USER = vsdc48 (Michal Pluta),
+ALGORITHM CODE = PS, NAME OF CITY-FILE = AISearchfile048.txt,
+SIZE = 48, TOUR LENGTH = 12313,
+29,25,12,6,8,18,35,15,21,39,34,10,3,17,13,27,22,28,37,43,41,7,23,1,20,46,2,16,38,33,47,14,40,19,30,0,5,4,36,31,45,42,24,11,32,26,9,44,
+NOTE = The parameter values are 'max_it' = 1000 and 'num_parts' = 500.
+RUN-TIME = 6.7 seconds.
+CERTIFICATE = 1417.
