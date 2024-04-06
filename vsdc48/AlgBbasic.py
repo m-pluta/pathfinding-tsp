@@ -386,7 +386,7 @@ def get_random_tour(n_cities: int = num_cities) -> Tour:
 
 def get_random_velocity(n_swaps: int = 10, n_cities: int = num_cities) -> Velocity:
     """Returns a random velocity containing `n_swaps` number of swaps across `n_cities` number of cities"""
-    return [tuple(random.sample(range(n_cities), 2)) for _ in range(n_swaps)]
+    return random.choices([(i, i + 1) for i in range(n_cities - 1)], k=n_swaps)
 
 def calc_v(tourA: Tour, tourB: Tour) -> Velocity:
     """Calculates the velocity between `tourA` and `tourB` by performing a bubble-sort"""
