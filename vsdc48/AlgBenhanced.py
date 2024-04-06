@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile175.txt"
+input_file = "AISearchfile042.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -365,14 +365,15 @@ max_it = 100_000_000            # Number of iterations
 num_parts = 500                 # Number of particles
 
 # Acceleration coefficients
-ALPHA = 0.3                     # cognitive learning factor
-BETA = 1                        # social learning factor
-EPSILON1 = 1                    # determines proximity
-EPSILON2 = 1                    # determines proximity
+ALPHA = 0.3 / 0.9               # cognitive learning factor
+BETA = 1.0 / 0.9                  # social learning factor
 
 # Inertia parameters
 INERTIA_START = 1
 INERTIA_RATIO = 0.9999
+
+# Proximity randomisation
+EPSILON_RANGE = (0.8, 1)
 
 # Extinction
 EXTINCTION_ITER = 200           # If no changes after this many iterations then extinction
@@ -387,6 +388,103 @@ ALL_CITIES = set(range(num_cities))
 Tour = CityList = List[int]
 Velocity = List[Tuple[int, int]]
 Solution = Tuple[Tour, int]      # Tour, tour length
+
+def save(tour, tour_length):
+    global max_it
+    global num_parts
+    added_note = ""
+    end_time = time.time()
+    elapsed_time = round(end_time - start_time, 1)
+
+    if algorithm_code == "GA":
+        try: max_it
+        except NameError: max_it = None
+        try: pop_size
+        except NameError: pop_size = None
+        if added_note != "":
+            added_note = added_note + "\n"
+        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'pop_size' = " + str(pop_size) + "."
+
+    if algorithm_code == "AC":
+        try: max_it
+        except NameError: max_it = None
+        try: num_ants
+        except NameError: num_ants = None
+        if added_note != "":
+            added_note = added_note + "\n"
+        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_ants' = " + str(num_ants) + "."
+
+    if algorithm_code == "PS":
+        try: max_it
+        except NameError: max_it = None
+        try: num_parts
+        except NameError: num_parts = None
+        if added_note != "":
+            added_note = added_note + "\n"
+        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_parts' = " + str(num_parts) + "."
+        
+    added_note = added_note + "\nRUN-TIME = " + str(elapsed_time) + " seconds.\n"
+
+    flag = "good"
+    length = len(tour)
+    for i in range(0, length):
+        if isinstance(tour[i], int) == False:
+            flag = "bad"
+        else:
+            tour[i] = int(tour[i])
+    if flag == "bad":
+        print("*** error: Your tour contains non-integer values.")
+        sys.exit()
+    if isinstance(tour_length, int) == False:
+        print("*** error: The tour-length is a non-integer value.")
+        sys.exit()
+    tour_length = int(tour_length)
+    if len(tour) != num_cities:
+        print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
+        sys.exit()
+    flag = "good"
+    for i in range(0, num_cities):
+        if not i in tour:
+            flag = "bad"
+    if flag == "bad":
+        print("*** error: Your tour has illegal or repeated city names.")
+        sys.exit()
+    check_tour_length = 0
+    for i in range(0, num_cities - 1):
+        check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
+    check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
+    if tour_length != check_tour_length:
+        flag = print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
+        sys.exit()
+    print("You, user " + my_user_name + ", have successfully built a tour of length " + str(tour_length) + "!")
+    len_user_name = len(my_user_name)
+    user_number = 0
+    for i in range(0, len_user_name):
+        user_number = user_number + ord(my_user_name[i])
+    alg_number = ord(algorithm_code[0]) + ord(algorithm_code[1])
+    tour_diff = abs(tour[0] - tour[num_cities - 1])
+    for i in range(0, num_cities - 1):
+        tour_diff = tour_diff + abs(tour[i + 1] - tour[i])
+    certificate = user_number + alg_number + tour_diff
+    local_time = time.asctime(time.localtime(time.time()))
+    output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
+    output_file_time = output_file_time.replace(" ", "0")
+    script_name = os.path.basename(sys.argv[0])
+    if len(sys.argv) > 2:
+        output_file_time = sys.argv[2]
+    output_file_name = script_name[0:len(script_name) - 3] + "_" + input_file[0:len(input_file) - 4] + "_" + output_file_time + ".txt"
+
+    f = open(output_file_name,'w')
+    f.write("USER = {0} ({1} {2}),\n".format(my_user_name, my_first_name, my_last_name))
+    f.write("ALGORITHM CODE = {0}, NAME OF CITY-FILE = {1},\n".format(algorithm_code, input_file))
+    f.write("SIZE = {0}, TOUR LENGTH = {1},\n".format(num_cities, tour_length))
+    f.write(str(tour[0]))
+    for i in range(1,num_cities):
+        f.write(",{0}".format(tour[i]))
+    f.write(",\nNOTE = {0}".format(added_note))
+    f.write("CERTIFICATE = {0}.\n".format(certificate))
+    f.close()
+    print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
 
 @dataclass
 class Particle:
@@ -432,7 +530,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     return added_cities, added_cost
 
 @profile
-def two_opt(tour: Tour) -> Tour:
+def two_opt(tour: Tour, passes: int = int(1e9)) -> Tour:
     """Performs 2-optimisation on a given `tour` to find an improvement"""
     
     # Best tour length after each 2 opt iteration
@@ -442,8 +540,13 @@ def two_opt(tour: Tour) -> Tour:
     best_tour = tour
     best_length = tour_length
 
+    pass_count = 0
     improved = True
     while improved:
+        
+        if pass_count == passes:
+            break
+        
         # Exits out the while if no improvement was found
         improved = False
 
@@ -456,7 +559,6 @@ def two_opt(tour: Tour) -> Tour:
                 # If it doesn't improve the length of the current tour then skip
                 if length_delta >= 0:
                     continue
-
                 # Calculate new tour length
                 new_tour_length = tour_length + length_delta
 
@@ -475,44 +577,8 @@ def two_opt(tour: Tour) -> Tour:
         # Update best tour and length found in the previous iteration
         tour = best_tour
         tour_length = best_length
-
-    return best_tour, best_length
-
-@profile
-def two_opt_one_pass(tour: Tour) -> Tour:
-    """Performs 2-optimisation on a given `tour` to find an improvement only doing one pass"""
-    
-    # Best tour length after each 2 opt iteration
-    tour_length = get_tour_length(tour)
-
-    # Best tour found at any point in time
-    best_tour = tour
-    best_length = tour_length
-    
-    # Store local reference to dist matrix for faster computation and cleaner code
-    d = dist_matrix
-
-    # Iterate through all possible 2-edge swaps
-    for i in range(1, num_cities - 2):
-        for j in range(i + 2, num_cities):
-            # Pre-calculate the length delta
-            length_delta = - d[tour[i-1]][tour[i]] - d[tour[j-1]][tour[j]] + d[tour[i-1]][tour[j-1]] + d[tour[i]][tour[j]]
-            
-            # If it doesn't improve the length of the current tour then skip
-            if length_delta >= 0:
-                continue
-            
-            # Calculate new tour length
-            new_tour_length = tour_length + length_delta
-
-            if new_tour_length < best_length:
-                # Perform the 2-opt swap
-                new_tour = tour[:]
-                new_tour[i:j] = tour[j - 1:i - 1:-1]
-                
-                # Update best tour found
-                best_tour = new_tour
-                best_length = new_tour_length
+        
+        pass_count += 1
 
     return best_tour, best_length
 
@@ -540,7 +606,7 @@ def generate_velocity(n_swaps: int = 5, n_cities: int = num_cities) -> Velocity:
 @profile
 def generate_particle() -> Particle:
     tour = generate_tour()
-    tour, tour_length = two_opt_one_pass(tour)
+    tour, tour_length = two_opt(tour, 2)
     velocity = generate_velocity()
     
     return Particle(tour, velocity, (tour, tour_length), 0, False, 0)
@@ -616,16 +682,16 @@ def apply_v(tour: Tour, v: Velocity) -> Tour:
     return new_tour
 
 @profile
-def calc_cognitive_v(p_a: Tour, p_best: Tour) -> Velocity:
+def calc_cognitive_v(p_a: Tour, p_best: Tour, e1: float) -> Velocity:
     """Calculates the cognitive velocity of a particle"""
     cognitive_v = calc_v(p_a, p_best)
-    return scale_v(cognitive_v, ALPHA * EPSILON1)
+    return scale_v(cognitive_v, ALPHA * e1)
 
 @profile
-def calc_social_v(p_a: Tour, g_best: Tour) -> Velocity:
+def calc_social_v(p_a: Tour, g_best: Tour, e2: float) -> Velocity:
     """Calculates the social velocity of a particle"""
     social_v = calc_v(p_a, g_best)
-    return scale_v(social_v, BETA * EPSILON2)
+    return scale_v(social_v, BETA * e2)
 
 class PSO_Solver:
     @profile
@@ -644,19 +710,31 @@ class PSO_Solver:
         inertia = INERTIA_START
         it = 0
         
-        while g_best[1] != 12150:
+        while True:
+            # print(it, last_global_update)
+            
             if it - last_global_update > EXTINCTION_ITER:
                 print("EXTINCTION")
                 parts = generateAllParticles()
+                print("PARTICLES GENERATED")
+                
+                best = min(parts, key=lambda p: p.p_best[1]).p_best
+                if best[1] < self.g_best[1]:
+                    self.g_best = best
+                    print(self.g_best[1])
+                    save(*self.g_best)
+                
                 last_global_update, it, inertia = 0, 0, INERTIA_START
             
             inertia *= INERTIA_RATIO
+            e1 = random.uniform(*EPSILON_RANGE)
+            e2 = random.uniform(*EPSILON_RANGE)
                 
             for a in range(num_parts):
                 # print(str(it).ljust(4), a)
                 # Calculate the cognitive & social velocities
-                cognitive_v = calc_cognitive_v(parts[a].p, parts[a].p_best[0])
-                social_v = calc_social_v(parts[a].p, g_best[0])
+                cognitive_v = calc_cognitive_v(parts[a].p, parts[a].p_best[0], e1)
+                social_v = calc_social_v(parts[a].p, g_best[0], e2)
                 
                 # Move the current particle
                 parts[a].p = apply_v(parts[a].p, parts[a].v)
@@ -683,7 +761,8 @@ class PSO_Solver:
                         
                         if g_best[1] < self.g_best[1]:
                             self.g_best = g_best
-                            print(self.g_best[1])
+                            save(*self.g_best)
+                            print("GBEST - " + str(self.g_best[1]))
 
             it += 1
 
@@ -703,7 +782,7 @@ class PSO_Solver:
     
 solver = PSO_Solver()
 
-solver.run_with_timeout(60 * 80)
+solver.run_with_timeout(60 * 60 * 24 * 7)
 
 tour, tour_length = solver.get_best_tour()
 

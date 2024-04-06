@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile535.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -358,24 +358,23 @@ from threading import Thread
 from copy import deepcopy
 from math import floor
 
+# Type aliases
+Tour = List[int]
+Velocity = List[Tuple[int, int]]
+Solution = Tuple[Tour, int]                 # Tour, tour length
+
 # Runtime constants
-max_it = 10000                              # Number of iterations
+max_it = 100                                # Number of iterations
 num_parts = 10                              # Number of particles
 
 # Neighbourhood Parameters
 delta = int(num_cities * num_cities * 1./4) # determinant of neighbourhood
 
 # Acceleration coefficients
-inertia = 1
-alpha = 1                                   # cognitive learning factor
-beta = 1                                    # social learning factor
-epsilon1 = 1                                # determines proximity
-epsilon2 = 1                                # determines proximity
+inertia = 0.75
+alpha = 0.5                                 # cognitive learning factor
+beta = 1.5                                  # social learning factor
 
-# Type aliases
-Tour = List[int]
-Velocity = List[Tuple[int, int]]
-Solution = Tuple[Tour, int]                         # Tour, tour length
 
 def get_tour_length(tour: Tour) -> int:
     """Calculates the length of a given `tour`"""
@@ -444,19 +443,15 @@ def apply_v(tour: Tour, v: Velocity) -> Tour:
 
     return new_tour
 
-def calc_cognitive_v(p_a: Tour, p_best: Tour) -> Velocity:
+def calc_cognitive_v(p_a: Tour, p_best: Tour, epsilon1: float) -> Velocity:
     """Calculates the cognitive velocity of a particle"""
     cognitive_v = calc_v(p_a, p_best)
     return scale_v(cognitive_v, alpha * epsilon1)
 
-def calc_social_v(p_a: Tour, n_a: Tour) -> Velocity:
+def calc_social_v(p_a: Tour, n_a: Tour, epsilon2: float) -> Velocity:
     """Calculates the social velocity of a particle"""
     social_v = calc_v(p_a, n_a)
     return scale_v(social_v, beta * epsilon2)
-
-def inertia(time: int) -> float:
-    """Linear inertia function going from 1 to 0"""
-    return (max_it - time) / max_it
 
 def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
     """Computes the neighbourhood of particle `a`, which is all the particles where the velocity to them is less than `delta` in length"""
@@ -474,45 +469,47 @@ def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
                 
     return n_hood
 
-class PSO_Solver:
-    def __init__(self) -> None:
+class PSO_Solver:    
+    def solve(self) -> None:
+        """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
         
         # Initialise particle positions and velocities
-        self.p = [get_random_tour() for _ in range(num_parts)]
-        self.v = [get_random_velocity() for _ in range(num_parts)]
+        p = [get_random_tour() for _ in range(num_parts)]
+        v = [get_random_velocity() for _ in range(num_parts)]
 
-        self.p_best = deepcopy(self.p)
+        p_best = deepcopy(p)
         # Calculate current best position
-        self.g_best = min(self.p_best, key=lambda x: get_tour_length(x))
-    
-    def solve(self) -> Tour:
-        """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
+        self.g_best = min(p_best, key=lambda x: get_tour_length(x))
+        
         t = 0
         while t < max_it:
+            epsilon1 = random.random()
+            epsilon2 = random.random()
+            
             for a in range(num_parts):
                 # Find the nearest particle
-                n_hood = get_neighbourhood(self.p_best, a)
+                n_hood = get_neighbourhood(p_best, a)
                 if n_hood:
                     nearest_part = min(n_hood, key=lambda b: get_tour_length(b))
                 
                 # Store old position and Move the current particle
-                p_a = self.p[a]
-                self.p[a] = apply_v(self.p[a], self.v[a])
+                p_a = p[a]
+                p[a] = apply_v(p[a], v[a])
                 
                 # Calculate the cognitive velocity
-                cognitive_v = calc_cognitive_v(p_a, self.p_best[a])
+                cognitive_v = calc_cognitive_v(p_a, p_best[a], epsilon1)
                 
                 # Calculate the social velocity
-                social_v = calc_social_v(p_a, nearest_part) if n_hood else []
+                social_v = calc_social_v(p_a, nearest_part, epsilon2) if n_hood else []
                 
                 # Update the velocity
-                self.v[a] = scale_v(self.v[a], inertia(t)) + cognitive_v + social_v
+                v[a] = scale_v(v[a], inertia) + cognitive_v + social_v
                 
                 # Update local-best solution
-                self.p_best[a] = min(self.p[a], self.p_best[a], key=lambda x: get_tour_length(x))
+                p_best[a] = min(p[a], p_best[a], key=lambda x: get_tour_length(x))
                     
             # Update global-best solution
-            self.g_best = min([self.g_best] + self.p_best, key=lambda x: get_tour_length(x))
+            self.g_best = min([self.g_best] + p_best, key=lambda x: get_tour_length(x))
 
             t += 1
 

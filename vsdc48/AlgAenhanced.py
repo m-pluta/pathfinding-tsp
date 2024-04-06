@@ -569,7 +569,7 @@ class AWA_AS_Solver:
         # If the there are no other cities to visit
         if not unvisited:
             return dist_matrix[tour[-1]][tour[0]]
-        
+
         # Sort the unvisited cities for hashing and memoisation
         unvisited = tuple(sorted(unvisited))
 
