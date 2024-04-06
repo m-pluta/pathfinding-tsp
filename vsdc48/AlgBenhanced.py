@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile042.txt"
+input_file = "AISearchfile175.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -702,10 +702,9 @@ class PSO_Solver:
         parts: List[Particle] = generateAllParticles()
 
         # Calculate global best
-        g_best = min(parts, key=lambda p: p.p_best[1]).p_best
-        self.g_best = g_best
+        self.g_best = min(parts, key=lambda p: p.p_best[1]).p_best
         
-        last_global_update = -1
+        last_update = -1
         
         inertia = INERTIA_START
         it = 0
@@ -713,7 +712,7 @@ class PSO_Solver:
         while True:
             # print(it, last_global_update)
             
-            if it - last_global_update > EXTINCTION_ITER:
+            if it - last_update > EXTINCTION_ITER:
                 print("EXTINCTION")
                 parts = generateAllParticles()
                 print("PARTICLES GENERATED")
@@ -724,7 +723,7 @@ class PSO_Solver:
                     print(self.g_best[1])
                     save(*self.g_best)
                 
-                last_global_update, it, inertia = 0, 0, INERTIA_START
+                last_update, it, inertia = 0, 0, INERTIA_START
             
             inertia *= INERTIA_RATIO
             e1 = random.uniform(*EPSILON_RANGE)
@@ -734,7 +733,7 @@ class PSO_Solver:
                 # print(str(it).ljust(4), a)
                 # Calculate the cognitive & social velocities
                 cognitive_v = calc_cognitive_v(parts[a].p, parts[a].p_best[0], e1)
-                social_v = calc_social_v(parts[a].p, g_best[0], e2)
+                social_v = calc_social_v(parts[a].p, self.g_best[0], e2)
                 
                 # Move the current particle
                 parts[a].p = apply_v(parts[a].p, parts[a].v)
@@ -753,16 +752,13 @@ class PSO_Solver:
                     parts[a].p_best = two_opt(parts[a].p)
                     
                     parts[a].last_update = it
-                    last_global_update = it
+                    last_update = it
 
                     # Update global best
-                    if parts[a].p_best[1] < g_best[1]:
-                        g_best = parts[a].p_best
-                        
-                        if g_best[1] < self.g_best[1]:
-                            self.g_best = g_best
-                            save(*self.g_best)
-                            print("GBEST - " + str(self.g_best[1]))
+                    if parts[a].p_best[1] < self.g_best[1]:
+                        self.g_best = parts[a].p_best
+                        save(*self.g_best)
+                        print("GBEST - " + str(self.g_best[1]))
 
             it += 1
 
