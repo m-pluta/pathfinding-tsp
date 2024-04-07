@@ -1,4 +1,4 @@
-SCRIPT = AlgAenhanced_AWA.py
+SCRIPT = AlgCbasic.py
 
 clean:
 	rm *.txt
