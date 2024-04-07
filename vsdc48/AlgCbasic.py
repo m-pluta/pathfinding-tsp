@@ -599,21 +599,6 @@ solver.run_with_timeout(59)
 
 tour, tour_length = solver.get_best_tour()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ############ START OF SECTOR 10 (IGNORE THIS COMMENT)
 ############
 ############ YOUR CODE SHOULD NOW BE COMPLETE AND WHEN EXECUTION OF THIS PROGRAM 'skeleton.py'
