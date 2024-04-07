@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile180.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -577,7 +577,60 @@ def cross_over(ind1: Individual, ind2: Individual) -> Individual:
         return Individual(child_tour2, length2)
 
 @profile
+def mutate_rsm(tour: Tour) -> None:
+    """Performs Reverse Sequence Mutation (RSM) / Inverse Mutation (IM) on the `tour`
+
+    Args:
+        tour (Tour): The input tour
+    """
+    if num_cities < 4:
+        # Too small to perform RSM
+        return
+    
+    # Pick two random indexes in the tour to perform RSM
+    i = random.randint(0, num_cities - 3)
+    j = random.randint(i + 2, num_cities - 1)
+    
+    # Reverse the partial tour between the two indexes
+    rev = reversed(tour[i:j])
+    tour[i:j] = rev
+
+@profile
+def mutate_partial_shuffle(tour: Tour) -> None:
+    """Performs Partial Shuffle Mutation (PSM) / Scramble Mutation on the `tour` which takes a subset of the tour and scrambles it
+
+    Args:
+        tour (Tour): The input tour
+    """
+    if num_cities < 4:
+        # Too small to shuffle partially
+        return
+    
+    # Maximum cities to shuffle
+    MAX_SHUFFLE = 5
+    
+    # Get start idx
+    max_i = num_cities - 2
+    i = random.randint(0, max_i)
+    
+    # Get end idx
+    max_j = min(i + MAX_SHUFFLE, num_cities)
+    j = random.randint(i + 2, max_j)
+    
+    # Shuffle the portion
+    shuffle_portion = tour[i:j]
+    random.shuffle(shuffle_portion)
+    
+    # Replace the original
+    tour[i:j] = shuffle_portion
+
+@profile
 def mutate_swap(tour: Tour) -> None:
+    """Performs Swap Mutation which swaps two random cities in the tour
+
+    Args:
+        tour (Tour): The input tour
+    """
     # Get two indexes to perform a swap
     i1, i2 = tuple(random.sample(ALL_CITIES, 2))
     
@@ -585,75 +638,67 @@ def mutate_swap(tour: Tour) -> None:
     temp = tour[i1]
     tour[i1] = tour[i2]
     tour[i2] = temp
-    
-@profile
-def mutate_partial_shuffle(tour: Tour) -> None:
-    if num_cities < 4:
-        # Too small to shuffle partially
-        return
-    
-    MIN_SHUFFLE = 2
-    MAX_SHUFFLE = 5
-    
-    # Get start idx
-    max_start_idx = num_cities - 3
-    start_idx = random.randint(1, max_start_idx)
-    
-    # Get end idx
-    max_end_idx = min(start_idx + MAX_SHUFFLE, num_cities - 1)
-    end_idx = random.randint(start_idx + MIN_SHUFFLE, max_end_idx)
-    
-    # Shuffle the portion
-    shuffle_portion = tour[start_idx:end_idx]
-    random.shuffle(shuffle_portion)
-    
-    # Replace the original
-    tour[start_idx:end_idx] = shuffle_portion
-
-@profile
-def mutate_rsm(tour: Tour) -> None:
-    if num_cities < 4:
-        # Too small to shuffle partially
-        return
-
-    i = random.randint(1, num_cities - 3)
-    j = random.randint(i + 2, num_cities - 1)
-    
-    rev = reversed(tour[i:j])
-    tour[i:j] = rev
 
 @profile
 def mutate_throas(tour: Tour) -> None:
+    """Performs THROAS mutation on a `tour` which circularly swaps 3 consequtive cities in the tour
+
+    Args:
+        tour (Tour): The input tour
+    """
     if num_cities < 5:
         # Too small to perform throas
         return
 
-    i = random.randint(1, num_cities - 4)
+    # Get a random index
+    i = random.randint(0, num_cities - 1)
     
+    # Perform the circular swap
     temp = tour[i]
-    tour[i] = tour[i+2]
-    tour[i+2] = tour[i+1]
-    tour[i+1] = temp
+    tour[i] = tour[i-1]
+    tour[i-1] = tour[i-2]
+    tour[i-2] = temp
     
 @profile
 def mutate_thrors(tour: Tour) -> None:
+    """Performs THRORS mutation on a `tour` which circularly swaps cities at any 3 indexes in the tour
+
+    Args:
+        tour (Tour): The input tour
+    """
+    if num_cities < 3:
+        # Too small to perform THRORS
+        return
+    
+    # Get 3 random indexes
     i, j, k = tuple(random.sample(ALL_CITIES, 3))
     
+    # Perform the circular 3-swap
     temp = tour[i]
     tour[i] = tour[k]
     tour[k] = tour[j]
     tour[j] = temp
 
 @profile
-def mutate(ind: Individual) -> None:
+def mutate_full_shuffle(tour: Tour) -> None:
+    tour[0:num_cities] = random.sample(ALL_CITIES, num_cities)
+
+@profile
+def mutate(ind: Individual, iter: int) -> None:
     """Performs a mutation by performing a random swap in the individual
 
     Args:
         ind (Individual): The individual to be mutated
     """
-    mutations = [mutate_swap, mutate_partial_shuffle, mutate_rsm, mutate_throas, mutate_thrors]
-    mutation = random.choice(mutations)
+    # Initialise the available mutations and their weights
+    mutations = [mutate_rsm, mutate_partial_shuffle, mutate_swap,
+                 mutate_throas, mutate_thrors, mutate_full_shuffle]
+    weights = [240,120,80,40,20,int(min(8, 1.02 ** (iter // 10)))]
     
+    # Pick a random mutation
+    mutation = random.choices(population=mutations, weights=weights, k=1)[0]
+    
+    # Apply the mutation
     mutation(ind.tour)
 
     # Recalculate the new tour length
@@ -685,7 +730,7 @@ class GA_Solver():
                 
                 # Randomly mutate the new individual
                 if random.random() < PROB_MUTATION:
-                    mutate(z)
+                    mutate(z, iter)
                     
                 # Check if the new individual is the new global best
                 if z.length < self.g_best.length:
@@ -727,7 +772,7 @@ class GA_Solver():
 
 solver = GA_Solver()
 
-solver.run_with_timeout(59)
+solver.run_with_timeout(120)
 
 tour, tour_length = solver.get_best_tour()
 
