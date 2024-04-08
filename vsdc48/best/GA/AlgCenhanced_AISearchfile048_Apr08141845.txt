@@ -1,7 +1,0 @@
-USER = vsdc48 (Michal Pluta),
-ALGORITHM CODE = GA, NAME OF CITY-FILE = AISearchfile048.txt,
-SIZE = 48, TOUR LENGTH = 12166,
-41,7,23,1,20,46,44,9,2,16,38,33,29,25,12,6,8,18,35,15,21,39,34,10,3,17,13,14,47,42,45,31,36,4,5,0,30,19,40,24,11,32,26,27,22,28,37,43,
-NOTE = The parameter values are 'max_it' = None and 'pop_size' = 1000.
-RUN-TIME = 50.8 seconds.
-CERTIFICATE = 1278.

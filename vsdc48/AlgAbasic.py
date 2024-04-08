@@ -372,7 +372,7 @@ Population = List[Individual]
 
 pop_size = 1000
 PROB_MUTATION = 0.02
-ALL_CITIES = set(range(num_cities))
+LIST_ALL_CITIES = list(range(num_cities))
 
 @profile
 def get_tour_length(tour: Tour) -> int:
@@ -393,7 +393,7 @@ def generate_individual() -> Individual:
     Returns:
         Individual: The individual
     """
-    tour = random.sample(ALL_CITIES, num_cities)
+    tour = random.sample(LIST_ALL_CITIES, num_cities)
     return Individual(tour, get_tour_length(tour))
 
 @profile
@@ -558,7 +558,6 @@ class GA_Solver():
                 # Check if the new individual is the new global best
                 if z.length < self.g_best.length:
                     self.g_best = z
-                    print(f"{iter} - {self.g_best.length}")
                 
                 # Add the individual to the new population
                 new_population.append(z)
