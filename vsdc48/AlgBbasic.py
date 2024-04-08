@@ -353,7 +353,7 @@ added_note = ""
 ############
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
-from typing import List, Tuple, Union
+from typing import List, Tuple
 from threading import Thread
 from copy import deepcopy
 from math import floor
@@ -364,7 +364,6 @@ Velocity = List[Tuple[int, int]]
 Solution = Tuple[Tour, int]                 # Tour, tour length
 
 # Runtime constants
-max_it = 100                                # Number of iterations
 num_parts = 10                              # Number of particles
 
 # Neighbourhood Parameters
@@ -377,19 +376,45 @@ beta = 1.5                                  # social learning factor
 
 
 def get_tour_length(tour: Tour) -> int:
-    """Calculates the length of a given `tour`"""
+    """Calculates the length of a given `tour`
+
+    Args:
+        tour (Tour): The input tour
+
+    Returns:
+        int: The length of the tour
+    """
     return sum(dist_matrix[tour[i]][tour[i-1]] for i in range(num_cities))
 
-def get_random_tour(n_cities: int = num_cities) -> Tour:
-    """Returns a random tour containing `n_cities` number of cities"""
-    return random.sample(range(n_cities), n_cities)
+def get_random_tour() -> Tour:
+    """Returns a random tour
 
-def get_random_velocity(n_swaps: int = 10, n_cities: int = num_cities) -> Velocity:
-    """Returns a random velocity containing `n_swaps` number of swaps across `n_cities` number of cities"""
-    return random.choices([(i, i + 1) for i in range(n_cities - 1)], k=n_swaps)
+    Returns:
+        Tour: The random Tour
+    """
+    return random.sample(range(num_cities), num_cities)
+
+def get_random_velocity(n_swaps: int = 10) -> Velocity:
+    """Returns a random velocity containing `n_swaps` number of swaps
+
+    Args:
+        n_swaps (int, optional): Number of swaps in the velocity. Defaults to 10.
+
+    Returns:
+        Velocity: The random velocity
+    """
+    return random.choices([(i, i + 1) for i in range(num_cities - 1)], k=n_swaps)
 
 def calc_v(tourA: Tour, tourB: Tour) -> Velocity:
-    """Calculates the velocity between `tourA` and `tourB` by performing a bubble-sort"""
+    """Calculates the velocity between `tourA` and `tourB` by performing a bubble-sort.
+    
+    Args:
+        tourA (Tour): The subtrahend in the velocity calculation
+        tourB (Tour): The minuend in the velocity calculation
+
+    Returns:
+        Velocity: The velocity corresponding to `tourB` - `tourA`
+    """
     
     # Copy tourA and create an index map of tourB to speed up index requests
     tourX = tourA[:]
@@ -417,8 +442,20 @@ def calc_v(tourA: Tour, tourB: Tour) -> Velocity:
     
     return v
 
-def scale_v(v: Velocity, gamma: float) -> Union[Velocity, None]:
-    """Scales a given velocity `v` by a given factor `gamma` using slicing"""
+def scale_v(v: Velocity, gamma: float) -> Velocity:
+    """Scales a given velocity `v` by a given scalar `gamma`
+
+    Args:
+        v (Velocity): The input velocity
+        gamma (float): The scalar to scale the velocity using
+
+    Returns:
+        Velocity: The scaled velocity
+    """
+    
+    # Negative scalar is just a reversal
+    if gamma < 0:
+        return reversed(scale_v(v, gamma))
 
     # Compute fractional portion of the velocity
     if 0 <= gamma <= 1:
@@ -429,12 +466,17 @@ def scale_v(v: Velocity, gamma: float) -> Union[Velocity, None]:
         gamma_floor = floor(gamma)
         return v * gamma_floor + scale_v(v, gamma - gamma_floor)
 
-    # Undefined for gamma <= 0
-    return None
-
 def apply_v(tour: Tour, v: Velocity) -> Tour:
-    """Given an existing `tour` and a velocity `v`, sequentially applies the swaps in the velocity and returns a new velocity"""
-    
+    """Given an existing `tour` and a velocity `v`, sequentially applies the swaps in the velocity and returns a new velocity
+
+    Args:
+        tour (Tour): The existing tour
+        v (Velocity): The velocity to apply
+
+    Returns:
+        Tour: The new tour
+    """
+    # Copy the existing tour
     new_tour = tour[:]
     
     # Sequentially apply all the swap operations
@@ -444,17 +486,43 @@ def apply_v(tour: Tour, v: Velocity) -> Tour:
     return new_tour
 
 def calc_cognitive_v(p_a: Tour, p_best: Tour, epsilon1: float) -> Velocity:
-    """Calculates the cognitive velocity of a particle"""
+    """Calculates the cognitive velocity of a particle
+
+    Args:
+        p_a (Tour): Currently position of the particle
+        p_best (Tour): Personal best of the particle
+        epsilon1 (float): Random proximity factor
+
+    Returns:
+        Velocity: The cognitive velocity of the particle
+    """
     cognitive_v = calc_v(p_a, p_best)
     return scale_v(cognitive_v, alpha * epsilon1)
 
 def calc_social_v(p_a: Tour, n_a: Tour, epsilon2: float) -> Velocity:
-    """Calculates the social velocity of a particle"""
+    """Calculates the social velocity of a particle
+
+    Args:
+        p_a (Tour): Current position of the particle
+        n_a (Tour): Current position of the best particle in the particle's neighbourhood
+        epsilon2 (float): Random proximity factor
+
+    Returns:
+        Velocity: The social velocity of the particle
+    """
     social_v = calc_v(p_a, n_a)
     return scale_v(social_v, beta * epsilon2)
 
 def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
-    """Computes the neighbourhood of particle `a`, which is all the particles where the velocity to them is less than `delta` in length"""
+    """Computes the neighbourhood of particle `a`, which is all the particles where the velocity to them is less than `delta` in length
+
+    Args:
+        ph (List[Tour]): The best positions of all the particles
+        a (int): The particle of interest
+
+    Returns:
+        List[Tour]: Particles in the neighbourhood of particle `a`
+    """
     
     # All potentials neighbours and tour of particle a
     all_other_particles = ph[:a] + ph[a + 1:]
@@ -471,8 +539,8 @@ def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
 
 class PSO_Solver:    
     def solve(self) -> None:
-        """Main Particle Swarm Optimisation routine which computes an approximately optimal tour"""
-        
+        """Starts the solving process
+        """
         # Initialise particle positions and velocities
         p = [get_random_tour() for _ in range(num_parts)]
         v = [get_random_velocity() for _ in range(num_parts)]
@@ -481,8 +549,8 @@ class PSO_Solver:
         # Calculate current best position
         self.g_best = min(p_best, key=lambda x: get_tour_length(x))
         
-        t = 0
-        while t < max_it:
+        while True:
+            # Pick random proximity factors
             epsilon1 = random.random()
             epsilon2 = random.random()
             
@@ -511,23 +579,33 @@ class PSO_Solver:
             # Update global-best solution
             self.g_best = min([self.g_best] + p_best, key=lambda x: get_tour_length(x))
 
-            t += 1
-
     def get_best_tour(self) -> Solution:
+        """Returns a tuple containing the solution tour and its length
+
+        Returns:
+            Solution: The solution
+        """
         return self.g_best, get_tour_length(self.g_best)
 
     def run_with_timeout(self, timeout: int = 59) -> bool:
-        # Run the solver for `timeout` number of seconds and return whether the solver timed otu
+        """Runs the solver for `timeout` number of seconds and returns whether the solver terminated
+
+        Args:
+            timeout (int, optional): Number of seconds to run the solver for. Defaults to 59.
+
+        Returns:
+            bool: Whether the solver terminated within the timeout
+        """
         solver_thread = Thread(target=self.solve)
         solver_thread.daemon = True
         solver_thread.start()
         solver_thread.join(timeout)
 
         return solver_thread.is_alive()
-    
+
 solver = PSO_Solver()
 
-solver.run_with_timeout(59)
+solver.run_with_timeout()
 
 tour, tour_length = solver.get_best_tour()
 

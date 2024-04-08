@@ -536,7 +536,6 @@ class GA_Solver():
         self.g_best = min(population, key=lambda i: i.length)
         
         # Start the iterations
-        iter = 1
         while True:
             # Define a new population and get the roulette distribution for the current population
             new_population: Population = []
@@ -564,7 +563,6 @@ class GA_Solver():
             
             # Update the existing population
             population = new_population
-            iter += 1
 
     @profile
     def get_best_tour(self) -> Solution:
@@ -594,7 +592,7 @@ class GA_Solver():
 
 solver = GA_Solver()
 
-solver.run_with_timeout(59)
+solver.run_with_timeout()
 
 tour, tour_length = solver.get_best_tour()
 
