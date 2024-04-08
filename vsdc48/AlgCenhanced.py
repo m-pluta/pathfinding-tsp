@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile180.txt"
+input_file = "AISearchfile175.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -354,10 +354,9 @@ added_note = ""
 ############ END OF SECTOR 9 (IGNORE THIS COMMENT)
 
 from dataclasses import dataclass
-from typing import List, Tuple, Callable
+from typing import List, Tuple
 from threading import Thread
 from line_profiler import profile
-from math import floor, log
 
 # Type aliases
 Tour = CityList = List[int]
@@ -373,8 +372,108 @@ Population = List[Individual]
 
 pop_size = 1000
 TOURNAMENT_SIZE = 20
-PROB_MUTATION = 0.02
-ALL_CITIES = set(range(num_cities))
+PROB_MUTATION = 0.04
+TWO_OPT_CHANCE = 0.001
+SET_ALL_CITIES = set(range(num_cities))
+LIST_ALL_CITIES = list(range(num_cities))
+
+def save(tour, tour_length):
+    global max_it
+    global pop_size
+    added_note = ""
+    end_time = time.time()
+    elapsed_time = round(end_time - start_time, 1)
+
+    if algorithm_code == "GA":
+        try: max_it
+        except NameError: max_it = None
+        try: pop_size
+        except NameError: pop_size = None
+        if added_note != "":
+            added_note = added_note + "\n"
+        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'pop_size' = " + str(pop_size) + "."
+
+    if algorithm_code == "AC":
+        try: max_it
+        except NameError: max_it = None
+        try: num_ants
+        except NameError: num_ants = None
+        if added_note != "":
+            added_note = added_note + "\n"
+        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_ants' = " + str(num_ants) + "."
+
+    if algorithm_code == "PS":
+        try: max_it
+        except NameError: max_it = None
+        try: num_parts
+        except NameError: num_parts = None
+        if added_note != "":
+            added_note = added_note + "\n"
+        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_parts' = " + str(num_parts) + "."
+        
+    added_note = added_note + "\nRUN-TIME = " + str(elapsed_time) + " seconds.\n"
+
+    flag = "good"
+    length = len(tour)
+    for i in range(0, length):
+        if isinstance(tour[i], int) == False:
+            flag = "bad"
+        else:
+            tour[i] = int(tour[i])
+    if flag == "bad":
+        print("*** error: Your tour contains non-integer values.")
+        sys.exit()
+    if isinstance(tour_length, int) == False:
+        print("*** error: The tour-length is a non-integer value.")
+        sys.exit()
+    tour_length = int(tour_length)
+    if len(tour) != num_cities:
+        print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
+        sys.exit()
+    flag = "good"
+    for i in range(0, num_cities):
+        if not i in tour:
+            flag = "bad"
+    if flag == "bad":
+        print("*** error: Your tour has illegal or repeated city names.")
+        sys.exit()
+    check_tour_length = 0
+    for i in range(0, num_cities - 1):
+        check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
+    check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
+    if tour_length != check_tour_length:
+        flag = print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
+        sys.exit()
+    print("You, user " + my_user_name + ", have successfully built a tour of length " + str(tour_length) + "!")
+    len_user_name = len(my_user_name)
+    user_number = 0
+    for i in range(0, len_user_name):
+        user_number = user_number + ord(my_user_name[i])
+    alg_number = ord(algorithm_code[0]) + ord(algorithm_code[1])
+    tour_diff = abs(tour[0] - tour[num_cities - 1])
+    for i in range(0, num_cities - 1):
+        tour_diff = tour_diff + abs(tour[i + 1] - tour[i])
+    certificate = user_number + alg_number + tour_diff
+    local_time = time.asctime(time.localtime(time.time()))
+    output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
+    output_file_time = output_file_time.replace(" ", "0")
+    script_name = os.path.basename(sys.argv[0])
+    if len(sys.argv) > 2:
+        output_file_time = sys.argv[2]
+    output_file_name = script_name[0:len(script_name) - 3] + "_" + input_file[0:len(input_file) - 4] + "_" + output_file_time + ".txt"
+
+    f = open(output_file_name,'w')
+    f.write("USER = {0} ({1} {2}),\n".format(my_user_name, my_first_name, my_last_name))
+    f.write("ALGORITHM CODE = {0}, NAME OF CITY-FILE = {1},\n".format(algorithm_code, input_file))
+    f.write("SIZE = {0}, TOUR LENGTH = {1},\n".format(num_cities, tour_length))
+    f.write(str(tour[0]))
+    for i in range(1,num_cities):
+        f.write(",{0}".format(tour[i]))
+    f.write(",\nNOTE = {0}".format(added_note))
+    f.write("CERTIFICATE = {0}.\n".format(certificate))
+    f.close()
+    print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
+
 
 @profile
 def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
@@ -387,7 +486,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
         Tuple[CityList, int]: Returns an tuple containing: an ordered list of the cities used to complete the tour and the cost of doing so
     """
     # Compute the unvisited cities
-    unvisited = ALL_CITIES - set(tour)
+    unvisited = SET_ALL_CITIES - set(tour)
     
     # Declare vars to store the cities used to complete the tour and the cost of doing so
     last_element, added_cities, added_cost = tour[-1], [], 0
@@ -412,7 +511,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
 
 @profile
 def generate_tour(partial_length: int = 2) -> Tour:
-    partial = random.sample(ALL_CITIES, partial_length)
+    partial = random.sample(LIST_ALL_CITIES, partial_length)
     
     added_cities, _ = nn_complete_tour(partial)
     
@@ -490,7 +589,7 @@ def generate_individual() -> Individual:
     Returns:
         Individual: The individual
     """
-    tour = random.sample(ALL_CITIES, num_cities)
+    tour = random.sample(LIST_ALL_CITIES, num_cities)
     return Individual(tour, get_tour_length(tour))
 
 @profile
@@ -508,45 +607,13 @@ def pick_individual(population: Population) -> Individual:
     return min(tournament, key=lambda ind: ind.length)
 
 @profile
-def create_child_tour(parent1: Tour, parent2: Tour, pos: int) -> Tour:
-    """Creates a child using two parents by performing cross-over
-
-    Args:
-        parent1 (Tour): The parent tour used for the prefix
-        parent2 (Tour): The parent tour used for the suffix
-        pos (int): Bit position when cross-over occurs
-
-    Returns:
-        Tour: The child tour
-    """
-    # Get the prefix and suffix of the child
-    prefix = parent1[:pos]
-    suffix = parent2[pos:]
+def ordered_cross_over(tour1: Tour, tour2: Tour, i: int, j: int) -> Tour:
+    new_tour = tour1[i:j]
+    visited = set(new_tour)
     
-    # Keep track of visited cities in the child tour
-    visited = set(prefix)
+    rest_tour = [city for city in tour2 if city not in visited]
     
-    # Identify erroneous (duplicate) cities in the given suffix
-    errors = []
-    for i, n in enumerate(suffix):
-        if n in visited:
-            # Add index of errors to array
-            errors.append(i)
-        else:
-            # If not erroneous then add it to visited
-            visited.add(n)
-    
-    # Iterate through the second parent's tour
-    for n in parent2:
-        if not n in visited:
-            # If a certain city has not been visited yet then visit it
-            # Fix the first error by visiting
-            index = errors.pop(0)
-            suffix[index] = n
-            visited.add(n)
-    
-    # Return the complete tour
-    return prefix + suffix
+    return rest_tour[num_cities-j:] + new_tour + rest_tour[:num_cities-j]
 
 @profile
 def cross_over(ind1: Individual, ind2: Individual) -> Individual:
@@ -560,11 +627,12 @@ def cross_over(ind1: Individual, ind2: Individual) -> Individual:
         Individual: Child Individual
     """
     # Pick a random position in the distribution
-    pos = random.randint(1, num_cities - 1)
+    i = random.randint(0, num_cities - 2)
+    j = random.randint(i + 1, num_cities - 1)
     
     # Create child tours using cross-over
-    child_tour1 = create_child_tour(ind1.tour, ind2.tour, pos)
-    child_tour2 = create_child_tour(ind2.tour, ind1.tour, pos)
+    child_tour1 = ordered_cross_over(ind1.tour, ind2.tour, i, j)
+    child_tour2 = ordered_cross_over(ind2.tour, ind1.tour, i, j)
     
     # Gets the fitness of both children
     length1 = get_tour_length(child_tour1)
@@ -632,7 +700,7 @@ def mutate_swap(tour: Tour) -> None:
         tour (Tour): The input tour
     """
     # Get two indexes to perform a swap
-    i1, i2 = tuple(random.sample(ALL_CITIES, 2))
+    i1, i2 = tuple(random.sample(LIST_ALL_CITIES, 2))
     
     # Perform the swap
     temp = tour[i1]
@@ -671,7 +739,7 @@ def mutate_thrors(tour: Tour) -> None:
         return
     
     # Get 3 random indexes
-    i, j, k = tuple(random.sample(ALL_CITIES, 3))
+    i, j, k = tuple(random.sample(LIST_ALL_CITIES, 3))
     
     # Perform the circular 3-swap
     temp = tour[i]
@@ -681,7 +749,7 @@ def mutate_thrors(tour: Tour) -> None:
 
 @profile
 def mutate_full_shuffle(tour: Tour) -> None:
-    tour[0:num_cities] = random.sample(ALL_CITIES, num_cities)
+    tour[0:num_cities] = random.sample(LIST_ALL_CITIES, num_cities)
 
 @profile
 def mutate(ind: Individual, iter: int) -> None:
@@ -728,13 +796,18 @@ class GA_Solver():
                 # Perform cross-over of the two individuals
                 z: Individual = cross_over(x, y)
                 
-                # Randomly mutate the new individual
-                if random.random() < PROB_MUTATION:
+                if random.random() < TWO_OPT_CHANCE:                
+                    tour, tour_length = two_opt(z.tour)
+                    z.tour = tour
+                    z.length = tour_length
+                elif random.random() < PROB_MUTATION:
+                    # Randomly mutate the new individual
                     mutate(z, iter)
-                    
+                
                 # Check if the new individual is the new global best
                 if z.length < self.g_best.length:
                     self.g_best = z
+                    save(self.g_best.tour, self.g_best.length)
                     print(f"{iter} - {self.g_best.length}")
                 
                 # Add the individual to the new population
@@ -772,7 +845,7 @@ class GA_Solver():
 
 solver = GA_Solver()
 
-solver.run_with_timeout(120)
+solver.run_with_timeout(60 * 60 * 24 * 7)
 
 tour, tour_length = solver.get_best_tour()
 
