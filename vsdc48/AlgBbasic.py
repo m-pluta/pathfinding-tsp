@@ -367,12 +367,12 @@ Solution = Tuple[Tour, int]                 # Tour, tour length
 num_parts = 10                              # Number of particles
 
 # Neighbourhood Parameters
-delta = int(num_cities * num_cities * 1./4) # determinant of neighbourhood
+DELTA = int(num_cities * num_cities * 1./4) # determinant of neighbourhood
 
 # Acceleration coefficients
-inertia = 0.75
-alpha = 0.5                                 # cognitive learning factor
-beta = 1.5                                  # social learning factor
+INERTIA = 0.75
+ALPHA = 0.5                                 # cognitive learning factor
+BETA = 1.5                                  # social learning factor
 
 
 def get_tour_length(tour: Tour) -> int:
@@ -497,7 +497,7 @@ def calc_cognitive_v(p_a: Tour, p_best: Tour, epsilon1: float) -> Velocity:
         Velocity: The cognitive velocity of the particle
     """
     cognitive_v = calc_v(p_a, p_best)
-    return scale_v(cognitive_v, alpha * epsilon1)
+    return scale_v(cognitive_v, ALPHA * epsilon1)
 
 def calc_social_v(p_a: Tour, n_a: Tour, epsilon2: float) -> Velocity:
     """Calculates the social velocity of a particle
@@ -511,7 +511,7 @@ def calc_social_v(p_a: Tour, n_a: Tour, epsilon2: float) -> Velocity:
         Velocity: The social velocity of the particle
     """
     social_v = calc_v(p_a, n_a)
-    return scale_v(social_v, beta * epsilon2)
+    return scale_v(social_v, BETA * epsilon2)
 
 def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
     """Computes the neighbourhood of particle `a`, which is all the particles where the velocity to them is less than `delta` in length
@@ -532,7 +532,7 @@ def get_neighbourhood(ph: List[Tour], a: int) -> List[Tour]:
     n_hood = []
     for tourB in all_other_particles:
         # Check if number of swaps between the two particle's tours is less than delta
-        if len(calc_v(tourA, tourB)) <= delta:
+        if len(calc_v(tourA, tourB)) <= DELTA:
             n_hood.append(tourB)
                 
     return n_hood
@@ -571,7 +571,7 @@ class PSO_Solver:
                 social_v = calc_social_v(p_a, nearest_part, epsilon2) if n_hood else []
                 
                 # Update the velocity
-                v[a] = scale_v(v[a], inertia) + cognitive_v + social_v
+                v[a] = scale_v(v[a], INERTIA) + cognitive_v + social_v
                 
                 # Update local-best solution
                 p_best[a] = min(p[a], p_best[a], key=lambda x: get_tour_length(x))

@@ -356,7 +356,6 @@ added_note = ""
 from dataclasses import dataclass
 from typing import List, Tuple
 from threading import Thread
-from line_profiler import profile
 
 # Type aliases
 Tour = List[int]
@@ -374,7 +373,6 @@ pop_size = 1000
 PROB_MUTATION = 0.02
 LIST_ALL_CITIES = list(range(num_cities))
 
-@profile
 def get_tour_length(tour: Tour) -> int:
     """Calculates the length of a given `tour`
 
@@ -386,7 +384,6 @@ def get_tour_length(tour: Tour) -> int:
     """
     return sum(dist_matrix[tour[i]][tour[i-1]] for i in range(num_cities))
 
-@profile
 def generate_individual() -> Individual:
     """Generates a random individual of the population which is just a random tour
 
@@ -396,7 +393,6 @@ def generate_individual() -> Individual:
     tour = random.sample(LIST_ALL_CITIES, num_cities)
     return Individual(tour, get_tour_length(tour))
 
-@profile
 def get_dist(pop: Population) -> Distribution:
     """Calculates the cumulative probability distribution of a population
 
@@ -420,7 +416,6 @@ def get_dist(pop: Population) -> Distribution:
 
     return dist
 
-@profile
 def pick_individual(population: Population, dist: Distribution) -> Individual:
     """Picks a random individual from the `population` using the provided Distribution `dist` like a roulette wheel
 
@@ -439,7 +434,6 @@ def pick_individual(population: Population, dist: Distribution) -> Individual:
         if c >= r:
             return population[i - 1]
 
-@profile
 def create_child_tour(parent1: Tour, parent2: Tour, pos: int) -> Tour:
     """Creates a child using two parents by performing cross-over
 
@@ -480,7 +474,6 @@ def create_child_tour(parent1: Tour, parent2: Tour, pos: int) -> Tour:
     # Return the complete tour
     return prefix + suffix
 
-@profile
 def cross_over(ind1: Individual, ind2: Individual) -> Individual:
     """Creates two children from the two individuals and returns the fittest one
 
@@ -508,7 +501,6 @@ def cross_over(ind1: Individual, ind2: Individual) -> Individual:
     else:
         return Individual(child_tour2, length2)
 
-@profile
 def mutate(ind: Individual) -> None:
     """Performs a mutation by performing a random swap in the individual
 
@@ -527,7 +519,6 @@ def mutate(ind: Individual) -> None:
     ind.length = get_tour_length(ind.tour)
 
 class GA_Solver():
-    @profile
     def solve(self) -> None:
         """Starts the solving process
         """
@@ -564,7 +555,6 @@ class GA_Solver():
             # Update the existing population
             population = new_population
 
-    @profile
     def get_best_tour(self) -> Solution:
         """Returns a tuple containing the solution tour and its length
 
@@ -573,7 +563,6 @@ class GA_Solver():
         """
         return (self.g_best.tour, self.g_best.length)
 
-    @profile
     def run_with_timeout(self, timeout: int = 59) -> bool:
         """Runs the solver for `timeout` number of seconds and returns whether the solver terminated
 

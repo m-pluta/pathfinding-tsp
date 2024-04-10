@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile175.txt"
+input_file = "AISearchfile535.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -356,7 +356,6 @@ added_note = ""
 from dataclasses import dataclass
 from typing import List, Tuple
 from threading import Thread
-from line_profiler import profile
 
 # Type aliases
 Tour = CityList = List[int]
@@ -370,10 +369,26 @@ class Individual:
 
 Population = List[Individual]
 
+# Runtime parameters
 pop_size = 1000
-TOURNAMENT_SIZE = 20
+TOURNAMENT_SIZE = int(pop_size / 50)
+
+# Probabilities
 PROB_MUTATION = 0.04
-TWO_OPT_CHANCE = 0.001
+TWO_OPT_PROB = 0.001
+
+# Maximum cities to shuffle in PSM mutation
+MAX_PARTIAL_SHUFFLE = 5
+
+# Extinction configuration
+EXTINCTION_ITER = 500
+EXTINCTION_PROB = 0.005
+EXTINCTION_RANGE = (0.2, 0.4)
+
+# Restarting algorithm
+MIN_RESTART_ITER = 1000
+
+# Useful variables
 SET_ALL_CITIES = set(range(num_cities))
 LIST_ALL_CITIES = list(range(num_cities))
 
@@ -474,8 +489,6 @@ def save(tour, tour_length):
     f.close()
     print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
 
-
-@profile
 def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     """Uses the nearest-neighbour algorithm to complete a partial `tour` and returns the cities and cost of completing the tour
 
@@ -509,17 +522,32 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     
     return added_cities, added_cost
 
-@profile
 def generate_tour(partial_length: int = 2) -> Tour:
+    """Generates a tour where the first `partial_length` cities are random and the rest are filled using nearest neighbour
+
+    Args:
+        partial_length (int, optional): Length of random portion. Defaults to 2.
+
+    Returns:
+        Tour: The generated tour
+    """
     partial = random.sample(LIST_ALL_CITIES, partial_length)
     
     added_cities, _ = nn_complete_tour(partial)
     
     return partial + added_cities
 
-@profile
-def two_opt(tour: Tour, passes: int = int(1e9)) -> Tour:
-    """Performs 2-optimisation on a given `tour` to find an improvement"""
+def two_opt(tour: Tour, passes: int = int(1e9)) -> Tuple[Tour, int]:
+    """Performs 2-optimisation on a given `tour` to find a local improvement
+
+    Args:
+        tour (Tour): The current tour
+        passes (int, optional): Number of passes of 2opt to perform. Defaults to int(1e9).
+
+    Returns:
+        Tour: The locally optimised tour
+        int: The tour's length
+    """
     
     # Best tour length after each 2 opt iteration
     tour_length = get_tour_length(tour)
@@ -528,14 +556,13 @@ def two_opt(tour: Tour, passes: int = int(1e9)) -> Tour:
     best_tour = tour
     best_length = tour_length
 
-    pass_count = 0
     improved = True
-    while improved:
-        
-        if pass_count == passes:
+    for _ in range(passes):
+        if not improved:
+            # Exit if no improvement found in previous iteration
             break
         
-        # Exits out the while if no improvement was found
+        # Initially no improvement
         improved = False
 
         # Iterate through all possible 2-edge swaps
@@ -565,12 +592,9 @@ def two_opt(tour: Tour, passes: int = int(1e9)) -> Tour:
         # Update best tour and length found in the previous iteration
         tour = best_tour
         tour_length = best_length
-        
-        pass_count += 1
 
     return best_tour, best_length
 
-@profile
 def get_tour_length(tour: Tour) -> int:
     """Calculates the length of a given `tour`
 
@@ -582,7 +606,6 @@ def get_tour_length(tour: Tour) -> int:
     """
     return sum(dist_matrix[tour[i]][tour[i-1]] for i in range(num_cities))
 
-@profile
 def generate_individual() -> Individual:
     """Generates a random individual of the population which is just a random tour
 
@@ -592,9 +615,8 @@ def generate_individual() -> Individual:
     tour = random.sample(LIST_ALL_CITIES, num_cities)
     return Individual(tour, get_tour_length(tour))
 
-@profile
 def pick_individual(population: Population) -> Individual:
-    """Picks a random individual from the `population`
+    """Picks a random individual from the `population` by running a tournament
 
     Args:
         population (Population): The population
@@ -606,16 +628,66 @@ def pick_individual(population: Population) -> Individual:
     
     return min(tournament, key=lambda ind: ind.length)
 
-@profile
-def ordered_cross_over(tour1: Tour, tour2: Tour, i: int, j: int) -> Tour:
-    new_tour = tour1[i:j]
+def ox_crossover(ind1: Individual, ind2: Individual, i: int, j: int) -> Tour:
+    """Performs ordered crossover on two parent individuals and returns the child tour
+
+    Args:
+        ind1 (Individual): First parent individual
+        ind2 (Individual): Second parent individual
+        i (int): Index 1 of crossover
+        j (int): Index 2 of crossover
+
+    Returns:
+        Tour: The child tour
+    """
+    # Get the genetic data from parent 1
+    new_tour = ind1.tour[i:j]
     visited = set(new_tour)
     
-    rest_tour = [city for city in tour2 if city not in visited]
+    # Get the rest of the tour
+    rest_tour = [city for city in ind2.tour if city not in visited]
     
+    # Rearrange these correctly to form the tour
     return rest_tour[num_cities-j:] + new_tour + rest_tour[:num_cities-j]
 
-@profile
+def scx_crossover(ind1: Individual, ind2: Individual):
+    # Start with the first city from the best parent
+    child = [ind1.tour[0]] if ind1.length <= ind2.length else [ind2.tour[0]]
+    visited = set(child)
+    
+    # Store index maps for both parents
+    i_map1 = {n:i for i,n in enumerate(ind1.tour)}
+    i_map2 = {n:i for i,n in enumerate(ind2.tour)}
+    
+    # Fill the child
+    while len(child) < num_cities:
+        # Get the current city in the child
+        curr = child[-1]
+        
+        # Find the next cities from each parent
+        next_p1 = ind1.tour[(i_map1[curr] + 1) % num_cities]
+        next_p2 = ind2.tour[(i_map2[curr] + 1) % num_cities]
+        
+        if next_p1 in visited and next_p2 in visited:
+            # Both next cities are in child, find the closest city not in child
+            unvisited = SET_ALL_CITIES - visited
+            next_city = min(unvisited, key=lambda x: dist_matrix[curr][x])
+        elif next_p1 in child:
+            # If city suggested by parent 1 has already been visited
+            next_city = next_p2
+        elif next_p2 in child or dist_matrix[curr][next_p1] < dist_matrix[curr][next_p2]:
+            # If city suggested by parent 2 has already been visited or city suggested by parent 1 is cheaper to visit
+            next_city = next_p1
+        else:
+            # If city suggested by parent 2 is cheaper to visit
+            next_city = next_p2
+        
+        # Append city to child and add to visited
+        child.append(next_city)
+        visited.add(next_city)
+        
+    return child
+
 def cross_over(ind1: Individual, ind2: Individual) -> Individual:
     """Creates two children from the two individuals and returns the fittest one
 
@@ -631,8 +703,8 @@ def cross_over(ind1: Individual, ind2: Individual) -> Individual:
     j = random.randint(i + 1, num_cities - 1)
     
     # Create child tours using cross-over
-    child_tour1 = ordered_cross_over(ind1.tour, ind2.tour, i, j)
-    child_tour2 = ordered_cross_over(ind2.tour, ind1.tour, i, j)
+    child_tour1 = ox_crossover(ind1, ind2, i, j)
+    child_tour2 = ox_crossover(ind2, ind1, i, j)
     
     # Gets the fitness of both children
     length1 = get_tour_length(child_tour1)
@@ -644,7 +716,6 @@ def cross_over(ind1: Individual, ind2: Individual) -> Individual:
     else:
         return Individual(child_tour2, length2)
 
-@profile
 def mutate_rsm(tour: Tour) -> None:
     """Performs Reverse Sequence Mutation (RSM) / Inverse Mutation (IM) on the `tour`
 
@@ -663,7 +734,6 @@ def mutate_rsm(tour: Tour) -> None:
     rev = reversed(tour[i:j])
     tour[i:j] = rev
 
-@profile
 def mutate_partial_shuffle(tour: Tour) -> None:
     """Performs Partial Shuffle Mutation (PSM) / Scramble Mutation on the `tour` which takes a subset of the tour and scrambles it
 
@@ -674,15 +744,12 @@ def mutate_partial_shuffle(tour: Tour) -> None:
         # Too small to shuffle partially
         return
     
-    # Maximum cities to shuffle
-    MAX_SHUFFLE = 5
-    
     # Get start idx
     max_i = num_cities - 2
     i = random.randint(0, max_i)
     
     # Get end idx
-    max_j = min(i + MAX_SHUFFLE, num_cities)
+    max_j = min(i + MAX_PARTIAL_SHUFFLE, num_cities)
     j = random.randint(i + 2, max_j)
     
     # Shuffle the portion
@@ -692,7 +759,6 @@ def mutate_partial_shuffle(tour: Tour) -> None:
     # Replace the original
     tour[i:j] = shuffle_portion
 
-@profile
 def mutate_swap(tour: Tour) -> None:
     """Performs Swap Mutation which swaps two random cities in the tour
 
@@ -707,7 +773,6 @@ def mutate_swap(tour: Tour) -> None:
     tour[i1] = tour[i2]
     tour[i2] = temp
 
-@profile
 def mutate_throas(tour: Tour) -> None:
     """Performs THROAS mutation on a `tour` which circularly swaps 3 consequtive cities in the tour
 
@@ -726,8 +791,7 @@ def mutate_throas(tour: Tour) -> None:
     tour[i] = tour[i-1]
     tour[i-1] = tour[i-2]
     tour[i-2] = temp
-    
-@profile
+
 def mutate_thrors(tour: Tour) -> None:
     """Performs THRORS mutation on a `tour` which circularly swaps cities at any 3 indexes in the tour
 
@@ -747,13 +811,37 @@ def mutate_thrors(tour: Tour) -> None:
     tour[k] = tour[j]
     tour[j] = temp
 
-@profile
 def mutate_full_shuffle(tour: Tour) -> None:
+    """Performs a mutation where the tour is randomly shuffled
+
+    Args:
+        tour (Tour): The input tour
+    """
     tour[0:num_cities] = random.sample(LIST_ALL_CITIES, num_cities)
 
-@profile
+def get_full_shuffle_weight(iter: int) -> int:
+    """Given an iteration number `iter`, returns the weight of a full shuffle occurring in the mutation probability distribution
+
+    Args:
+        iter (int): Iteration number, or Iterations since last update
+
+    Returns:
+        int: Weight of the full shuffle mutation occurring
+    """
+    # Full shuffle weight profile corresponding to the function:
+    # min(8, 1.02 ^ (iter // 10))
+    # which is an exponential growing from 1 to 8 across 1000 iterations
+    full_shuffle_prob = [0, 333, 528, 667, 774, 862, 936, 1000]
+    
+    # Gets the weight corresponding to the iteration
+    prob = 0
+    while prob != 8 and iter > full_shuffle_prob[prob]:
+        prob += 1
+    
+    return prob
+
 def mutate(ind: Individual, iter: int) -> None:
-    """Performs a mutation by performing a random swap in the individual
+    """Performs a mutation by randomly picking a possible mutation and applying it
 
     Args:
         ind (Individual): The individual to be mutated
@@ -761,7 +849,7 @@ def mutate(ind: Individual, iter: int) -> None:
     # Initialise the available mutations and their weights
     mutations = [mutate_rsm, mutate_partial_shuffle, mutate_swap,
                  mutate_throas, mutate_thrors, mutate_full_shuffle]
-    weights = [240,120,80,40,20,int(min(8, 1.02 ** (iter // 10)))]
+    weights = [12,6,4,2,1,get_full_shuffle_weight(iter)]
     
     # Pick a random mutation
     mutation = random.choices(population=mutations, weights=weights, k=1)[0]
@@ -773,7 +861,6 @@ def mutate(ind: Individual, iter: int) -> None:
     ind.length = get_tour_length(ind.tour)
 
 class GA_Solver():
-    @profile
     def solve(self) -> None:
         """Starts the solving process
         """
@@ -782,10 +869,33 @@ class GA_Solver():
         self.g_best = min(population, key=lambda i: i.length)
         
         # Start the iterations
-        iter = 1
+        last_update_iter = -1
+        iter = 0
         while True:
+            print(iter, last_update_iter)
             # Define a new population
             new_population: Population = []
+            
+            if iter - last_update_iter > EXTINCTION_ITER and random.random() < EXTINCTION_PROB:
+                # Extinction commences
+                # Choose number of individuals to kill in the extinction
+                min_to_kill = int(EXTINCTION_RANGE[0] * pop_size)
+                max_to_kill = int(EXTINCTION_RANGE[1] * pop_size)
+                num_to_kill = random.randint(min_to_kill, max_to_kill)
+                print("Extinction", num_to_kill)
+                
+                # Since the population is randomly ordered, we can just remove from the start of the list
+                population = sorted(population, key=lambda ind: ind.length)
+                population = population[num_to_kill:]
+            
+            if iter > MIN_RESTART_ITER and iter > 2 * last_update_iter:
+                # Restart the algorithm if the current iteration number is twice
+                # the iteration number when the last incumbent solution was found
+                print("RESTART")
+                population = [generate_individual() for _ in range(pop_size)]
+                last_update_iter = -1
+                iter = 0
+                continue
             
             # Generate a new population
             for _ in range(pop_size):
@@ -796,18 +906,21 @@ class GA_Solver():
                 # Perform cross-over of the two individuals
                 z: Individual = cross_over(x, y)
                 
-                if random.random() < TWO_OPT_CHANCE:                
-                    tour, tour_length = two_opt(z.tour)
+                if random.random() < TWO_OPT_PROB:
+                    # Randomly spawn a 'genius' in the population by performing 2opt on the child
+                    tour, tour_length = two_opt(z.tour, 10)
                     z.tour = tour
                     z.length = tour_length
                 elif random.random() < PROB_MUTATION:
                     # Randomly mutate the new individual
-                    mutate(z, iter)
+                    mutate(z, iter - last_update_iter)
                 
                 # Check if the new individual is the new global best
                 if z.length < self.g_best.length:
                     self.g_best = z
-                    save(self.g_best.tour, self.g_best.length)
+                    last_update_iter = iter
+                    if z.length < 48500:
+                        save(self.g_best.tour, self.g_best.length)
                     print(f"{iter} - {self.g_best.length}")
                 
                 # Add the individual to the new population
@@ -817,7 +930,6 @@ class GA_Solver():
             population = new_population
             iter += 1
 
-    @profile
     def get_best_tour(self) -> Solution:
         """Returns a tuple containing the solution tour and its length
 
@@ -826,7 +938,6 @@ class GA_Solver():
         """
         return (self.g_best.tour, self.g_best.length)
 
-    @profile
     def run_with_timeout(self, timeout: int = 59) -> bool:
         """Runs the solver for `timeout` number of seconds and returns whether the solver terminated
 
