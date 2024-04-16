@@ -1,5 +1,11 @@
 {
     "editor.formatOnSave": false,
     "editor.defaultFormatter": null,
-    "editor.formatOnType": false
+    "editor.formatOnType": false,
+    "grammarly.selectors": [
+        {
+            "language": "tex",
+            "scheme": "untitled"
+        }
+    ]
 }

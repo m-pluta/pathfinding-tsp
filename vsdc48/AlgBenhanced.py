@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile535.txt"
+input_file = "AISearchfile175.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -360,7 +360,7 @@ from math import floor
 
 # Runtime
 MAXINT = sys.maxsize * 2 + 1
-num_parts = 1000                    # Number of particles
+num_parts = 100                    # Number of particles
 
 # Acceleration coefficients
 ALPHA = 0.3 / 0.9                   # Cognitive learning factor
@@ -374,7 +374,7 @@ INERTIA_RATIO = 0.9999              # Current inertia value is multiplied at eve
 EPSILON_RANGE = (0.8, 1)            # Values of epsilon are randomly picked within this range
 
 # Extinction
-EXTINCTION_ITER = 500               # If no changes after this many iterations then extinction
+EXTINCTION_ITER = 250               # If no changes after this many iterations then extinction
 
 # Useful variables
 SET_ALL_CITIES = set(range(num_cities))
@@ -382,7 +382,7 @@ LIST_ALL_CITIES = list(range(num_cities))
 
 # Dazing
 DAZE_ITER = EXTINCTION_ITER / 10    # Number of iterations since a particle's personal best for dazing to be possible
-DAZE_PROB = 0.0003                  # Probability that a particle gets dazed
+DAZE_PROB = 0.001                  # Probability that a particle gets dazed
 DAZE_DURATION = 10                  # Duration of the daze
 
 # Type aliases
@@ -433,7 +433,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     
     return added_cities, added_cost
 
-def two_opt(tour: Tour, passes: int = int(1e9)) -> Tuple[Tour, int]:
+def two_opt(tour: Tour, passes: int = int(1e9)) -> Solution:
     """Performs 2-optimisation on a given `tour` to find a local improvement
 
     Args:
@@ -543,7 +543,7 @@ def generate_particle() -> Particle:
         Particle: A new particle
     """
     tour = generate_nn_tour()
-    tour, tour_length = two_opt(tour, 2)
+    tour, tour_length = two_opt(tour)
     velocity = generate_velocity()
     solution = (tour, tour_length)
     
@@ -689,6 +689,9 @@ class PSO_Solver:
         # Generate all the particles
         parts: List[Particle] = generateAllParticles()
         
+        # Calculate global best
+        self.g_best = min(parts, key=lambda p: p.p_best[1]).p_best
+        
         # Runtime variables
         inertia = INERTIA_START
         iter = 0
@@ -719,8 +722,9 @@ class PSO_Solver:
                     parts[a].dazed = True
                     parts[a].dazed_until = iter + DAZE_DURATION
                     
-                    # Generate a random tour but make it a bit better by applying 10 iterations of 2-opt
-                    parts[a].p = two_opt(generate_random_tour(), 10)[0]
+                    # Generate a random tour but make it a bit better by applying 20 iterations of 2-opt
+                    parts[a].p = two_opt(generate_random_tour(), 20)[0]
+                    parts[a].v = []
                     parts[a].last_update = iter
                 elif parts[a].dazed and iter >= parts[a].dazed_until:
                     # Free the particle from dazing
