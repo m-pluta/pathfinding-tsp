@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile175.txt"
+input_file = "AISearchfile535.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -360,7 +360,7 @@ from math import floor
 
 # Runtime
 MAXINT = sys.maxsize * 2 + 1
-num_parts = 100                    # Number of particles
+num_parts = 100                     # Number of particles
 
 # Acceleration coefficients
 ALPHA = 0.3 / 0.9                   # Cognitive learning factor

@@ -364,7 +364,7 @@ Velocity = List[Tuple[int, int]]
 Solution = Tuple[Tour, int]
 
 # Runtime
-num_parts = 1000                            # Number of particles
+num_parts = 100                             # Number of particles
 
 # Neighbourhood
 DELTA = int(num_cities * num_cities * 1./4) # Neighbourhood distance
