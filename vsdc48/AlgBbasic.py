@@ -361,18 +361,18 @@ from math import floor
 # Type aliases
 Tour = List[int]
 Velocity = List[Tuple[int, int]]
-Solution = Tuple[Tour, int]                 # Tour, tour length
+Solution = Tuple[Tour, int]
 
-# Runtime constants
-num_parts = 10                              # Number of particles
+# Runtime
+num_parts = 1000                            # Number of particles
 
-# Neighbourhood Parameters
-DELTA = int(num_cities * num_cities * 1./4) # determinant of neighbourhood
+# Neighbourhood
+DELTA = int(num_cities * num_cities * 1./4) # Neighbourhood distance
 
 # Acceleration coefficients
-INERTIA = 0.75
-ALPHA = 0.5                                 # cognitive learning factor
-BETA = 1.5                                  # social learning factor
+INERTIA = 0.75                              # Inertia / theta
+ALPHA = 0.5                                 # Cognitive learning factor
+BETA = 1.5                                  # Social learning factor
 
 
 def get_tour_length(tour: Tour) -> int:

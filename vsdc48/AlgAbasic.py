@@ -369,8 +369,13 @@ class Individual:
 
 Population = List[Individual]
 
-pop_size = 1000
-PROB_MUTATION = 0.02
+# Runtime
+pop_size = 1000         # Population size
+
+# Mutation
+PROB_MUTATION = 0.02    # Probability for an individual to mutate in a iteration
+
+# Useful variables
 LIST_ALL_CITIES = list(range(num_cities))
 
 def get_tour_length(tour: Tour) -> int:
@@ -393,7 +398,7 @@ def generate_individual() -> Individual:
     tour = random.sample(LIST_ALL_CITIES, num_cities)
     return Individual(tour, get_tour_length(tour))
 
-def get_dist(pop: Population) -> Distribution:
+def get_distribution(pop: Population) -> Distribution:
     """Calculates the cumulative probability distribution of a population
 
     Args:
@@ -530,7 +535,7 @@ class GA_Solver():
         while True:
             # Define a new population and get the roulette distribution for the current population
             new_population: Population = []
-            dist = get_dist(population)
+            dist = get_distribution(population)
             
             # Generate a new population
             for _ in range(pop_size):

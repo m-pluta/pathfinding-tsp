@@ -157,7 +157,7 @@ def read_in_algorithm_codes_and_tariffs(alg_codes_file):
 ############
 ############ END OF SECTOR 0 (IGNORE THIS COMMENT)
 
-input_file = "AISearchfile058.txt"
+input_file = "AISearchfile535.txt"
 
 ############ START OF SECTOR 1 (IGNORE THIS COMMENT)
 ############
@@ -358,139 +358,44 @@ from dataclasses import dataclass
 from threading import Thread
 from math import floor
 
-#Global constants
+# Runtime
 MAXINT = sys.maxsize * 2 + 1
-num_parts = 1000                 # Number of particles
+num_parts = 1000                    # Number of particles
 
 # Acceleration coefficients
-ALPHA = 0.3 / 0.9               # cognitive learning factor
-BETA = 1.0 / 0.9                # social learning factor
+ALPHA = 0.3 / 0.9                   # Cognitive learning factor
+BETA = 1.0 / 0.9                    # Social learning factor
 
-# Inertia parameters
-INERTIA_START = 1
-INERTIA_RATIO = 0.9999
+# Inertia
+INERTIA_START = 1                   # Initial value of theta
+INERTIA_RATIO = 0.9999              # Current inertia value is multiplied at every iteration by this value
 
-# Proximity randomisation
-EPSILON_RANGE = (0.8, 1)
+# Proximity
+EPSILON_RANGE = (0.8, 1)            # Values of epsilon are randomly picked within this range
 
 # Extinction
-EXTINCTION_ITER = 500           # If no changes after this many iterations then extinction
+EXTINCTION_ITER = 500               # If no changes after this many iterations then extinction
 
+# Useful variables
 SET_ALL_CITIES = set(range(num_cities))
 LIST_ALL_CITIES = list(range(num_cities))
 
-# Dazing setup
-DAZE_ITER = EXTINCTION_ITER / 10
-DAZE_PROB = 0.0003
-DAZE_DURATION = 10
+# Dazing
+DAZE_ITER = EXTINCTION_ITER / 10    # Number of iterations since a particle's personal best for dazing to be possible
+DAZE_PROB = 0.0003                  # Probability that a particle gets dazed
+DAZE_DURATION = 10                  # Duration of the daze
 
 # Type aliases
 Tour = CityList = List[int]
 Velocity = List[Tuple[int, int]]
 Solution = Tuple[Tour, int]
 
-def save(tour, tour_length):
-    global max_it
-    global num_parts
-    added_note = ""
-    end_time = time.time()
-    elapsed_time = round(end_time - start_time, 1)
-
-    if algorithm_code == "GA":
-        try: max_it
-        except NameError: max_it = None
-        try: pop_size
-        except NameError: pop_size = None
-        if added_note != "":
-            added_note = added_note + "\n"
-        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'pop_size' = " + str(pop_size) + "."
-
-    if algorithm_code == "AC":
-        try: max_it
-        except NameError: max_it = None
-        try: num_ants
-        except NameError: num_ants = None
-        if added_note != "":
-            added_note = added_note + "\n"
-        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_ants' = " + str(num_ants) + "."
-
-    if algorithm_code == "PS":
-        try: max_it
-        except NameError: max_it = None
-        try: num_parts
-        except NameError: num_parts = None
-        if added_note != "":
-            added_note = added_note + "\n"
-        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_parts' = " + str(num_parts) + "."
-        
-    added_note = added_note + "\nRUN-TIME = " + str(elapsed_time) + " seconds.\n"
-
-    flag = "good"
-    length = len(tour)
-    for i in range(0, length):
-        if isinstance(tour[i], int) == False:
-            flag = "bad"
-        else:
-            tour[i] = int(tour[i])
-    if flag == "bad":
-        print("*** error: Your tour contains non-integer values.")
-        sys.exit()
-    if isinstance(tour_length, int) == False:
-        print("*** error: The tour-length is a non-integer value.")
-        sys.exit()
-    tour_length = int(tour_length)
-    if len(tour) != num_cities:
-        print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
-        sys.exit()
-    flag = "good"
-    for i in range(0, num_cities):
-        if not i in tour:
-            flag = "bad"
-    if flag == "bad":
-        print("*** error: Your tour has illegal or repeated city names.")
-        sys.exit()
-    check_tour_length = 0
-    for i in range(0, num_cities - 1):
-        check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
-    check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
-    if tour_length != check_tour_length:
-        flag = print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
-        sys.exit()
-    print("You, user " + my_user_name + ", have successfully built a tour of length " + str(tour_length) + "!")
-    len_user_name = len(my_user_name)
-    user_number = 0
-    for i in range(0, len_user_name):
-        user_number = user_number + ord(my_user_name[i])
-    alg_number = ord(algorithm_code[0]) + ord(algorithm_code[1])
-    tour_diff = abs(tour[0] - tour[num_cities - 1])
-    for i in range(0, num_cities - 1):
-        tour_diff = tour_diff + abs(tour[i + 1] - tour[i])
-    certificate = user_number + alg_number + tour_diff
-    local_time = time.asctime(time.localtime(time.time()))
-    output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
-    output_file_time = output_file_time.replace(" ", "0")
-    script_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) > 2:
-        output_file_time = sys.argv[2]
-    output_file_name = script_name[0:len(script_name) - 3] + "_" + input_file[0:len(input_file) - 4] + "_" + output_file_time + ".txt"
-
-    f = open(output_file_name,'w')
-    f.write("USER = {0} ({1} {2}),\n".format(my_user_name, my_first_name, my_last_name))
-    f.write("ALGORITHM CODE = {0}, NAME OF CITY-FILE = {1},\n".format(algorithm_code, input_file))
-    f.write("SIZE = {0}, TOUR LENGTH = {1},\n".format(num_cities, tour_length))
-    f.write(str(tour[0]))
-    for i in range(1,num_cities):
-        f.write(",{0}".format(tour[i]))
-    f.write(",\nNOTE = {0}".format(added_note))
-    f.write("CERTIFICATE = {0}.\n".format(certificate))
-    f.close()
-    print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
 
 @dataclass
 class Particle:
     p: Tour
     v: Velocity
-    p_best: Tuple[Tour, int]
+    p_best: Solution
     last_update: int
     dazed: bool
     dazed_until: int
@@ -640,8 +545,9 @@ def generate_particle() -> Particle:
     tour = generate_nn_tour()
     tour, tour_length = two_opt(tour, 2)
     velocity = generate_velocity()
+    solution = (tour, tour_length)
     
-    return Particle(tour, velocity, (tour, tour_length), 0, False, 0)
+    return Particle(tour, velocity, solution, 0, False, 0)
 
 def generateAllParticles() -> List[Particle]:
     """ Generates `num_parts` number of particles and returns them as a list
@@ -776,11 +682,12 @@ class PSO_Solver:
     def solve(self) -> None:
         """Starts the solving process
         """
+        # Initialise global best with a nearest-neighbour tour
+        tour = generate_nn_tour()
+        self.g_best: Solution = (tour, get_tour_length(tour))
+        
         # Generate all the particles
         parts: List[Particle] = generateAllParticles()
-
-        # Calculate global best
-        self.g_best = min(parts, key=lambda p: p.p_best[1]).p_best
         
         # Runtime variables
         inertia = INERTIA_START
@@ -788,19 +695,14 @@ class PSO_Solver:
         last_global_update = -1
 
         while True:
-            print(iter, sum(part.dazed for part in parts))
             if iter > EXTINCTION_ITER and iter > 2 * last_global_update:
                 # Complete extinction - essentially a restart
-                print("EXTINCTION")
                 parts = generateAllParticles()
-                print("PARTICLES GENERATED")
                 
                 # Check if a new global best is within the new particle swarm
                 best = min(parts, key=lambda p: p.p_best[1]).p_best
                 if best[1] < self.g_best[1]:
                     self.g_best = best
-                    print(self.g_best[1])
-                    save(*self.g_best)
                 
                 # Reset variables
                 last_global_update, iter, inertia = 0, 0, INERTIA_START
@@ -820,7 +722,6 @@ class PSO_Solver:
                     # Generate a random tour but make it a bit better by applying 10 iterations of 2-opt
                     parts[a].p = two_opt(generate_random_tour(), 10)[0]
                     parts[a].last_update = iter
-                    print("DAZE")
                 elif parts[a].dazed and iter >= parts[a].dazed_until:
                     # Free the particle from dazing
                     parts[a].dazed = False
@@ -857,8 +758,6 @@ class PSO_Solver:
                     # Update global best
                     if parts[a].p_best[1] < self.g_best[1]:
                         self.g_best = parts[a].p_best
-                        save(*self.g_best)
-                        print("GBEST - " + str(self.g_best[1]))
 
             iter += 1
 
@@ -888,11 +787,11 @@ class PSO_Solver:
     
 solver = PSO_Solver()
 
-solver.run_with_timeout(60 * 60 * 24 * 7)
+solver.run_with_timeout()
 
 tour, tour_length = solver.get_best_tour()
 
-########### Testing when to normalise
+##### Testing when to normalise
 
 # tour = get_random_tour()
 

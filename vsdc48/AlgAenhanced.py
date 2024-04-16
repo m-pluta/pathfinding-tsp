@@ -372,128 +372,32 @@ class Individual:
 Population = List[Individual]
 
 # Runtime parameters
-pop_size = 10000  # 1000
-TOURNAMENT_SIZE = int(pop_size / 50)
+pop_size = 1000                         # Population size
+TOURNAMENT_SIZE = int(pop_size / 50)    # How many individuals participate in each tournament selection
 
-# Probabilities
-PROB_MUTATION = 0.04
-TWO_OPT_PROB = 0.001
-TWO_OPT_NUM_ITER = 2
+# Mutation
+PROB_MUTATION = 0.04                    # Probability for an individual to mutate in a iteration
+MAX_PARTIAL_SHUFFLE = 5                 # Maximum cities to shuffle in PSM mutation
 
-# Maximum cities to shuffle in PSM mutation
-MAX_PARTIAL_SHUFFLE = 5
+# 2-opt
+TWO_OPT_PROB = 0.001                    # Probability an individual gets a rare 2-opt mutation in a iteration
+TWO_OPT_NUM_PASSES = 10   # 2           # How many passes of of 2-opt to perform
 
-# Extinction configuration
-EXTINCTION_ITER = 500
-EXTINCTION_PROB = 0.005
-EXTINCTION_RANGE = (0.2, 0.4)
+# Extinction
+EXTINCTION_ITER = 500                   # Minimum number of iterations since last incumbent solution for extinction to be possible
+EXTINCTION_PROB = 0.005                 # Probability of an extinction
+EXTINCTION_RANGE = (0.2, 0.4)           # Size of extinction as fractions of total population
 
 # Restarting algorithm
-MIN_RESTART_ITER = 200  # 5000
-MAX_RESTART_ITER = 10000
+# Classical restarts occur when current iteration = 2 * number of iterations since last incumbent solution
+MIN_RESTART_ITER = 300  # 5000          # Minimum number of iterations since last restart
+MAX_RESTART_ITER = 500  # 10000         # Maximum iterations since last incumbent solution for restart to occur
 
 # Useful variables
 SET_ALL_CITIES = set(range(num_cities))
 LIST_ALL_CITIES = list(range(num_cities))
 
-
-def save(tour, tour_length):
-    global max_it
-    global pop_size
-    added_note = ""
-    end_time = time.time()
-    elapsed_time = round(end_time - start_time, 1)
-
-    if algorithm_code == "GA":
-        try: max_it
-        except NameError: max_it = None
-        try: pop_size
-        except NameError: pop_size = None
-        if added_note != "":
-            added_note = added_note + "\n"
-        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'pop_size' = " + str(pop_size) + "."
-
-    if algorithm_code == "AC":
-        try: max_it
-        except NameError: max_it = None
-        try: num_ants
-        except NameError: num_ants = None
-        if added_note != "":
-            added_note = added_note + "\n"
-        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_ants' = " + str(num_ants) + "."
-
-    if algorithm_code == "PS":
-        try: max_it
-        except NameError: max_it = None
-        try: num_parts
-        except NameError: num_parts = None
-        if added_note != "":
-            added_note = added_note + "\n"
-        added_note = added_note + "The parameter values are 'max_it' = " + str(max_it) + " and 'num_parts' = " + str(num_parts) + "."
-        
-    added_note = added_note + "\nRUN-TIME = " + str(elapsed_time) + " seconds.\n"
-
-    flag = "good"
-    length = len(tour)
-    for i in range(0, length):
-        if isinstance(tour[i], int) == False:
-            flag = "bad"
-        else:
-            tour[i] = int(tour[i])
-    if flag == "bad":
-        print("*** error: Your tour contains non-integer values.")
-        sys.exit()
-    if isinstance(tour_length, int) == False:
-        print("*** error: The tour-length is a non-integer value.")
-        sys.exit()
-    tour_length = int(tour_length)
-    if len(tour) != num_cities:
-        print("*** error: The tour does not consist of " + str(num_cities) + " cities as there are, in fact, " + str(len(tour)) + ".")
-        sys.exit()
-    flag = "good"
-    for i in range(0, num_cities):
-        if not i in tour:
-            flag = "bad"
-    if flag == "bad":
-        print("*** error: Your tour has illegal or repeated city names.")
-        sys.exit()
-    check_tour_length = 0
-    for i in range(0, num_cities - 1):
-        check_tour_length = check_tour_length + dist_matrix[tour[i]][tour[i + 1]]
-    check_tour_length = check_tour_length + dist_matrix[tour[num_cities - 1]][tour[0]]
-    if tour_length != check_tour_length:
-        flag = print("*** error: The length of your tour is not " + str(tour_length) + "; it is actually " + str(check_tour_length) + ".")
-        sys.exit()
-    print("You, user " + my_user_name + ", have successfully built a tour of length " + str(tour_length) + "!")
-    len_user_name = len(my_user_name)
-    user_number = 0
-    for i in range(0, len_user_name):
-        user_number = user_number + ord(my_user_name[i])
-    alg_number = ord(algorithm_code[0]) + ord(algorithm_code[1])
-    tour_diff = abs(tour[0] - tour[num_cities - 1])
-    for i in range(0, num_cities - 1):
-        tour_diff = tour_diff + abs(tour[i + 1] - tour[i])
-    certificate = user_number + alg_number + tour_diff
-    local_time = time.asctime(time.localtime(time.time()))
-    output_file_time = local_time[4:7] + local_time[8:10] + local_time[11:13] + local_time[14:16] + local_time[17:19]
-    output_file_time = output_file_time.replace(" ", "0")
-    script_name = os.path.basename(sys.argv[0])
-    if len(sys.argv) > 2:
-        output_file_time = sys.argv[2]
-    output_file_name = script_name[0:len(script_name) - 3] + "_" + input_file[0:len(input_file) - 4] + "_" + output_file_time + ".txt"
-
-    f = open(output_file_name,'w')
-    f.write("USER = {0} ({1} {2}),\n".format(my_user_name, my_first_name, my_last_name))
-    f.write("ALGORITHM CODE = {0}, NAME OF CITY-FILE = {1},\n".format(algorithm_code, input_file))
-    f.write("SIZE = {0}, TOUR LENGTH = {1},\n".format(num_cities, tour_length))
-    f.write(str(tour[0]))
-    for i in range(1,num_cities):
-        f.write(",{0}".format(tour[i]))
-    f.write(",\nNOTE = {0}".format(added_note))
-    f.write("CERTIFICATE = {0}.\n".format(certificate))
-    f.close()
-    print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
-
+# UNUSED
 def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
     """Uses the nearest-neighbour algorithm to complete a partial `tour` and returns the cities and cost of completing the tour
 
@@ -527,7 +431,7 @@ def nn_complete_tour(tour: Tour) -> Tuple[CityList, int]:
 
     return added_cities, added_cost
 
-
+# UNUSED
 def generate_tour(partial_length: int = 2) -> Tour:
     """Generates a tour where the first `partial_length` cities are random and the rest are filled using nearest neighbour
 
@@ -662,7 +566,7 @@ def ox_crossover(ind1: Individual, ind2: Individual, i: int, j: int) -> Tour:
     # Rearrange these correctly to form the tour
     return rest_tour[num_cities-j:] + new_tour + rest_tour[:num_cities-j]
 
-
+# UNUSED
 def scx_crossover(ind1: Individual, ind2: Individual):
     # Start with the first city from the best parent
     child = [ind1.tour[0]] if ind1.length <= ind2.length else [ind2.tour[0]]
@@ -897,7 +801,6 @@ class GA_Solver():
         last_update_iter = -1
         iter = 0
         while True:
-            print(self.g_best.length, iter, last_update_iter)
             # Define a new population
             new_population: Population = []
 
@@ -907,7 +810,6 @@ class GA_Solver():
                 min_to_kill = int(EXTINCTION_RANGE[0] * pop_size)
                 max_to_kill = int(EXTINCTION_RANGE[1] * pop_size)
                 num_to_kill = random.randint(min_to_kill, max_to_kill)
-                print("Extinction", num_to_kill)
 
                 # Since the population is randomly ordered, we can just remove from the start of the list
                 population = sorted(population, key=lambda ind: ind.length)
@@ -916,7 +818,6 @@ class GA_Solver():
             if iter > MIN_RESTART_ITER and (iter > 2 * last_update_iter or iter - last_update_iter > MAX_RESTART_ITER):
                 # Restart the algorithm if the current iteration number is twice
                 # the iteration number when the last incumbent solution was found
-                print("RESTART")
                 population = [generate_individual() for _ in range(pop_size)]
                 last_update_iter = -1
                 iter = 0
@@ -933,7 +834,7 @@ class GA_Solver():
 
                 if random.random() < TWO_OPT_PROB:
                     # Randomly spawn a 'genius' in the population by performing 2opt on the child
-                    tour, tour_length = two_opt(z.tour, TWO_OPT_NUM_ITER)
+                    tour, tour_length = two_opt(z.tour, TWO_OPT_NUM_PASSES)
                     z.tour = tour
                     z.length = tour_length
                 elif random.random() < PROB_MUTATION:
@@ -944,9 +845,6 @@ class GA_Solver():
                 if z.length < self.g_best.length:
                     self.g_best = z
                     last_update_iter = iter
-                    if z.length < 1187:
-                        save(self.g_best.tour, self.g_best.length)
-                    print(f"{iter} - {self.g_best.length}")
 
                 # Add the individual to the new population
                 new_population.append(z)
@@ -982,7 +880,7 @@ class GA_Solver():
 
 solver = GA_Solver()
 
-solver.run_with_timeout(60 * 60 * 24 * 7)
+solver.run_with_timeout()
 
 tour, tour_length = solver.get_best_tour()
 
