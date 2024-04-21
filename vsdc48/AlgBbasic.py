@@ -367,12 +367,12 @@ Solution = Tuple[Tour, int]
 num_parts = 100                             # Number of particles
 
 # Neighbourhood
-DELTA = int(num_cities * num_cities * 1./4) # Neighbourhood distance
+DELTA = int(1./4 * num_cities ** 2) # Neighbourhood distance
 
 # Acceleration coefficients
 INERTIA = 0.75                              # Inertia / theta
-ALPHA = 0.5                                 # Cognitive learning factor
-BETA = 1.5                                  # Social learning factor
+ALPHA = 0.3                                 # Cognitive learning factor
+BETA = 1.2                                  # Social learning factor
 
 
 def get_tour_length(tour: Tour) -> int:

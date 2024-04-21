@@ -373,7 +373,7 @@ Population = List[Individual]
 pop_size = 1000         # Population size
 
 # Mutation
-PROB_MUTATION = 0.02    # Probability for an individual to mutate in a iteration
+PROB_MUTATION = 0.04    # Probability for an individual to mutate in a iteration
 
 # Useful variables
 LIST_ALL_CITIES = list(range(num_cities))
@@ -408,7 +408,7 @@ def get_distribution(pop: Population) -> Distribution:
         Distribution: The cumulative probability distribution
     """
     # Get the length of the worst tour in the population
-    max_length = round(1.1 * max(pop, key=lambda individual: individual.length).length)
+    max_length = max([individual.length for individual in pop])
     
     # Calculate the cumulative distribution of tour lengths
     # i.e. fitter individuals will own a greater share of the distribution
@@ -702,3 +702,4 @@ f.close()
 print("I have successfully written your tour to the tour file:\n   " + output_file_name + ".")
 
 ############ END OF SECTOR 10 (IGNORE THIS COMMENT)
+

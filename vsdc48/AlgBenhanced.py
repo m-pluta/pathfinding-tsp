@@ -363,8 +363,8 @@ MAXINT = sys.maxsize * 2 + 1
 num_parts = 100                     # Number of particles
 
 # Acceleration coefficients
-ALPHA = 0.3 / 0.9                   # Cognitive learning factor
-BETA = 1.0 / 0.9                    # Social learning factor
+ALPHA = 0.3                         # Cognitive learning factor
+BETA = 1.2                          # Social learning factor
 
 # Inertia
 INERTIA_START = 1                   # Initial value of theta
