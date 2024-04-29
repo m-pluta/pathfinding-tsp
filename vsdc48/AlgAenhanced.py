@@ -359,7 +359,6 @@ from threading import Thread
 
 # Type aliases
 Tour = CityList = List[int]
-Distribution = List[int]
 Solution = Tuple[Tour, int]
 
 
@@ -873,7 +872,8 @@ class GA_Solver():
         solver_thread = Thread(target=self.solve)
         solver_thread.daemon = True
         solver_thread.start()
-        solver_thread.join(timeout)
+        so_far = time.time() - start_time
+        solver_thread.join(timeout - so_far)
 
         return solver_thread.is_alive()
 
